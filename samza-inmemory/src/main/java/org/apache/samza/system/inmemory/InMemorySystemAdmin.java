@@ -1,0 +1,125 @@
+package org.apache.samza.system.inmemory;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.samza.Partition;
+import org.apache.samza.config.Config;
+import org.apache.samza.system.StreamSpec;
+import org.apache.samza.system.StreamValidationException;
+import org.apache.samza.system.SystemAdmin;
+import org.apache.samza.system.SystemStreamMetadata;
+import org.apache.samza.system.SystemStreamPartition;
+
+
+/**
+ *
+ */
+public class InMemorySystemAdmin implements SystemAdmin {
+  private final InMemoryManager inMemoryManager;
+  private final InMemorySystemConfig inMemorySystemConfig;
+
+  public InMemorySystemAdmin(InMemoryManager manager, Config config) {
+    inMemoryManager = manager;
+    inMemorySystemConfig = new InMemorySystemConfig(config);
+  }
+
+  @Override
+  public void start() {
+
+  }
+
+  @Override
+  public void stop() {
+
+  }
+
+  /**
+   * Fetches the offsets for the messages immediately after the supplied offsets
+   * for a group of SystemStreamPartitions.
+   *
+   * @param offsets
+   *          Map from SystemStreamPartition to current offsets.
+   * @return Map from SystemStreamPartition to offsets immediately after the
+   *         current offsets.
+   */
+  @Override
+  public Map<SystemStreamPartition, String> getOffsetsAfter(Map<SystemStreamPartition, String> offsets) {
+    return offsets.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, null));
+  }
+
+  /**
+   * Fetch metadata from a system for a set of streams.
+   *
+   * @param streamNames
+   *          The streams to to fetch metadata for.
+   * @return A map from stream name to SystemStreamMetadata for each stream
+   *         requested in the parameter set.
+   */
+  @Override
+  public Map<String, SystemStreamMetadata> getSystemStreamMetadata(Set<String> streamNames) {
+    return streamNames.stream()
+        .collect(Collectors.toMap(Function.identity(), streamName -> new SystemStreamMetadata(streamName,
+            Collections.singletonMap(new Partition(0),
+                new SystemStreamMetadata.SystemStreamPartitionMetadata(null, null, null)))));
+
+  }
+
+  /**
+   * Compare the two offsets. -1, 0, +1 means offset1 &lt; offset2,
+   * offset1 == offset2 and offset1 &gt; offset2 respectively. Return
+   * null if those two offsets are not comparable
+   *
+   * @param offset1 First offset for comparison.
+   * @param offset2 Second offset for comparison.
+   * @return -1 if offset1 &lt; offset2; 0 if offset1 == offset2; 1 if offset1 &gt; offset2. Null if not comparable
+   */
+  @Override
+  public Integer offsetComparator(String offset1, String offset2) {
+    if (offset1 == null) {
+      return offset2 == null ? 0 : -1;
+    } else if (offset2 == null) {
+      return 1;
+    }
+    return offset1.compareTo(offset2);
+  }
+
+  /**
+   * Create a stream described by the spec.
+   *
+   * @param streamSpec  The spec, or blueprint from which the physical stream will be created on the system.
+   * @return            {@code true} if the stream was actually created and not pre-existing.
+   *                    {@code false} if the stream was pre-existing.
+   *                    A RuntimeException will be thrown if creation fails.
+   */
+  @Override
+  public boolean createStream(StreamSpec streamSpec) {
+    return inMemoryManager.initializeStream(streamSpec, inMemorySystemConfig.getSerializedDataSet(streamSpec.getId()));
+  }
+
+  /**
+   * Validates the stream described by the streamSpec on the system.
+   * A {@link StreamValidationException} should be thrown for any validation error.
+   *
+   * @param streamSpec  The spec, or blueprint for the physical stream on the system.
+   * @throws StreamValidationException if validation fails.
+   */
+  @Override
+  public void validateStream(StreamSpec streamSpec) throws StreamValidationException {
+
+  }
+
+  /**
+   * Clear the stream described by the spec.
+   * @param streamSpec  The spec for the physical stream on the system.
+   * @return {@code true} if the stream was successfully cleared.
+   *         {@code false} if clearing stream failed.
+   */
+  @Override
+  public boolean clearStream(StreamSpec streamSpec) {
+    return false;
+  }
+}
