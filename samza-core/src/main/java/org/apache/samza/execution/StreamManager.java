@@ -82,7 +82,7 @@ public class StreamManager {
     Map<String, SystemStreamMetadata> streamToMetadata = systemAdmin.getSystemStreamMetadata(streamNames);
     // set the partitions of a stream to its StreamEdge
     streamToMetadata.forEach((stream, data) ->
-      streamToPartitionCount.put(stream, data.getSystemStreamPartitionMetadata().size()));
+        streamToPartitionCount.put(stream, data.getSystemStreamPartitionMetadata().size()));
 
     return streamToPartitionCount;
   }

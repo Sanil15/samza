@@ -110,6 +110,12 @@ public class StreamProcessor {
     this(config, customMetricsReporters, (Object) streamTaskFactory, processorListener, null);
   }
 
+  @VisibleForTesting
+  JobCoordinator getCurrentJobCoordinator() {
+    return jobCoordinator;
+  }
+
+
   /* package private */
   JobCoordinator getJobCoordinator() {
     return Util.
@@ -119,10 +125,6 @@ public class StreamProcessor {
         .getJobCoordinator(config);
   }
 
-  @VisibleForTesting
-  JobCoordinator getCurrentJobCoordinator() {
-    return jobCoordinator;
-  }
 
   StreamProcessor(Config config, Map<String, MetricsReporter> customMetricsReporters, Object taskFactory,
                   StreamProcessorLifecycleListener processorListener, JobCoordinator jobCoordinator) {
