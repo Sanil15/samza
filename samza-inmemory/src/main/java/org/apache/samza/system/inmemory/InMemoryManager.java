@@ -126,7 +126,7 @@ public class InMemoryManager {
               String newestOffset = String.valueOf(entry.getValue().size());
               String upcomingOffset = String.valueOf(entry.getValue().size() + 1);
 
-              return new SystemStreamMetadata.SystemStreamPartitionMetadata(oldestOffset, newestOffset, upcomingOffset);
+              return new SystemStreamMetadata.SystemStreamPartitionMetadata(null, null, null);
 
             }));
 

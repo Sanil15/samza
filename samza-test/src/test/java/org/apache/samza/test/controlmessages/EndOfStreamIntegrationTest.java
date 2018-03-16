@@ -99,15 +99,15 @@ public class EndOfStreamIntegrationTest extends AbstractIntegrationTestHarness {
 
 //    configs.put("task.class", TestStreamTask.class.getName());
     configs.put("task.inputs", "test.PageView");
+    configs.put("systems.test.PageView.samza.offset.default","oldest");
 
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
-
 
     StreamTask task = new StreamTask() {
       @Override
       public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) throws Exception {
         Map<String,Object> outgoing = new HashMap<>();
-        System.out.println("----------------------------------------"+envelope.getKey()+"-----------------------------");
+        System.out.println("----------------------------------------"+envelope.getMessage()+"-----------------------------");
         outgoing.put((String) envelope.getKey(),envelope.getMessage());
         collector.send(new OutgoingMessageEnvelope(new SystemStream("test","Output"), outgoing));
       }
@@ -115,7 +115,7 @@ public class EndOfStreamIntegrationTest extends AbstractIntegrationTestHarness {
 
     LocalApplicationRunner app = new LocalApplicationRunner(new MapConfig(configs));
     app.runTask(task);
-//    app.waitForFinish();
+    app.waitForFinish();
 
 
 //    int partitionCount = 4;

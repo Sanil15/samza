@@ -97,13 +97,19 @@ public class InMemorySystemAdmin implements SystemAdmin {
    */
   @Override
   public Integer offsetComparator(String offset1, String offset2) {
-    Preconditions.checkNotNull(offset1);
-    Preconditions.checkNotNull(offset2);
-
-    int o1 = Integer.valueOf(offset1);
-    int o2 = Integer.valueOf(offset2);
-
-    return o1 - o2;
+//    Preconditions.checkNotNull(offset1);
+//    Preconditions.checkNotNull(offset2);
+//
+//    int o1 = Integer.valueOf(offset1);
+//    int o2 = Integer.valueOf(offset2);
+//
+//    return o1 - o2;
+    if (offset1 == null) {
+      return offset2 == null ? 0 : -1;
+    } else if (offset2 == null) {
+      return 1;
+    }
+    return offset1.compareTo(offset2);
   }
 
   /**

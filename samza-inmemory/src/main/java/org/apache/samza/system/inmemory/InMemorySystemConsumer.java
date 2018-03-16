@@ -77,7 +77,7 @@ public class InMemorySystemConsumer implements SystemConsumer {
    */
   @Override
   public void register(SystemStreamPartition systemStreamPartition, String offset) {
-    sspToOffset.put(systemStreamPartition, offset);
+    sspToOffset.put(systemStreamPartition, "0");
   }
 
   /**
