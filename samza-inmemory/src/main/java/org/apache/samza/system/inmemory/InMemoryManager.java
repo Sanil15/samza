@@ -19,6 +19,7 @@
 
 package org.apache.samza.system.inmemory;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -52,8 +53,9 @@ public class InMemoryManager {
   }
 
   public void put(SystemStreamPartition ssp, Object message) {
+    bufferedMessages.computeIfAbsent(ssp, value -> new LinkedList<>());
     List<IncomingMessageEnvelope> messages = bufferedMessages.get(ssp);
-    int offset = messages.size() + 1;
+    int offset =   messages.size();
     IncomingMessageEnvelope messageEnvelope = new IncomingMessageEnvelope(ssp, String.valueOf(offset), null, message);
     bufferedMessages.get(ssp)
         .addLast(messageEnvelope);
@@ -71,17 +73,26 @@ public class InMemoryManager {
     int startingOffset = Integer.parseInt(offset);
     List<IncomingMessageEnvelope> messageEnvelopesForSSP = bufferedMessages.getOrDefault(ssp, new LinkedList<>());
 
+    // we are at head and nothing to return
+    if (startingOffset >= messageEnvelopesForSSP.size()) {
+      return new LinkedList<>();
+    }
     return messageEnvelopesForSSP.subList(startingOffset, messageEnvelopesForSSP.size());
   }
 
-  public boolean initializeStream(StreamSpec streamSpec, String serializedDataSet) {
-    Set<Object> dataSet = InMemorySystemUtils.deserialize(serializedDataSet);
+  public boolean initializeStream(StreamSpec streamSpec, String serializedDataSet){
+    try {
+      Set<Object> dataSet = InMemorySystemUtils.deserialize(serializedDataSet);
+
     int partitionCount = streamSpec.getPartitionCount();
     int partition = 0;
 
     for (Object data : dataSet) {
       put(new SystemStreamPartition(streamSpec.toSystemStream(), new Partition(partition)), data);
       partition = (partition + 1) % partitionCount;
+    }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
 
     return true;

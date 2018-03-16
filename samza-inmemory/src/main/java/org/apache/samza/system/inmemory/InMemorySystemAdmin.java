@@ -20,6 +20,7 @@
 package org.apache.samza.system.inmemory;
 
 import com.google.common.base.Preconditions;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -115,7 +116,11 @@ public class InMemorySystemAdmin implements SystemAdmin {
    */
   @Override
   public boolean createStream(StreamSpec streamSpec) {
-    return inMemoryManager.initializeStream(streamSpec, inMemorySystemConfig.getSerializedDataSet(streamSpec.getId()));
+    try {
+      return inMemoryManager.initializeStream(streamSpec, inMemorySystemConfig.getSerializedDataSet(streamSpec.getId()));
+    } catch (Exception e){
+      throw new RuntimeException(e);
+    }
   }
 
   /**
