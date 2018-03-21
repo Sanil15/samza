@@ -1,4 +1,4 @@
-package org.apache.samza.test.framework;
+package org.apache.samza.test.framework.factory;
 
 import org.apache.samza.config.Config;
 import org.apache.samza.metrics.MetricsRegistry;
