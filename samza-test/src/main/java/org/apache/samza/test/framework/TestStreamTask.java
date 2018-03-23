@@ -1,6 +1,7 @@
 package org.apache.samza.test.framework;
 
 import java.util.HashMap;
+import java.util.Map;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.JobConfig;
 import org.apache.samza.config.JobCoordinatorConfig;
@@ -17,7 +18,7 @@ import org.apache.samza.test.framework.stream.CollectionStream;
 public class TestStreamTask {
   public StreamTask task;
   public HashMap<String,String> _config;
-  InMemorySystemFactoryTest factoryTest;
+  private InMemorySystemFactoryTest factoryTest;
   public static final String SYSTEM_NAME = "test-samza";
   public static final String JOB_NAME = "test-samza-job";
 
@@ -58,7 +59,7 @@ public class TestStreamTask {
   public void run() {
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(_config));
     runner.runTask(task);
-    runner.waitForFinish();
+    //runner.waitForFinish();
   };
 
 }

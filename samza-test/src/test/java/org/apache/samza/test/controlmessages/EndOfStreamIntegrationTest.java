@@ -21,10 +21,8 @@ package org.apache.samza.test.controlmessages;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import org.apache.samza.application.StreamApplication;
 import org.apache.samza.config.JobConfig;
 import org.apache.samza.config.JobCoordinatorConfig;
 import org.apache.samza.config.MapConfig;
@@ -39,15 +37,13 @@ import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.StreamSpec;
 import org.apache.samza.system.SystemStream;
-import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.test.controlmessages.TestData.PageView;
 import org.apache.samza.test.controlmessages.TestData.PageViewJsonSerdeFactory;
-import org.apache.samza.test.framework.InMemorySystemFactoryTest;
+import org.apache.samza.test.framework.factory.InMemorySystemFactoryTest;
 import org.apache.samza.test.harness.AbstractIntegrationTestHarness;
-import org.apache.samza.test.util.ArraySystemFactory;
 import org.apache.samza.test.util.Base64Serializer;
 import org.junit.Test;
 
@@ -92,7 +88,7 @@ public class EndOfStreamIntegrationTest extends AbstractIntegrationTestHarness {
     configs.put("serializers.registry.int.class", "org.apache.samza.serializers.IntegerSerdeFactory");
     configs.put("serializers.registry.json.class", PageViewJsonSerdeFactory.class.getName());
 
-    // create the initial stream
+    // create the initial stream, this is consumed by in memory system
     StreamSpec spec = new StreamSpec("PageView","PageView","test",4);
     InMemorySystemFactoryTest factoryTest = new InMemorySystemFactoryTest();
     factoryTest.getAdmin("test", new MapConfig(configs)).createStream(spec);

@@ -1,6 +1,5 @@
 package org.apache.samza.test.framework.stream;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -9,10 +8,12 @@ import java.util.Map;
 import org.apache.samza.config.MapConfig;
 import org.apache.samza.config.TaskConfig;
 import org.apache.samza.operators.KV;
-import org.apache.samza.serializers.Serializer;
+import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.StreamSpec;
-import org.apache.samza.system.SystemFactory;
+import org.apache.samza.system.SystemProducer;
+import org.apache.samza.system.SystemStream;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
+import org.apache.samza.system.inmemory.InMemorySystemProducer;
 import org.apache.samza.test.framework.Base64Serializer;
 import org.apache.samza.test.framework.TestStreamTask;
 
@@ -29,15 +30,17 @@ public class CollectionStream<T> {
     this.streamConfig = new HashMap<>();
     this.collection = collection;
     this.partitionCount = partitionCount;
-    streamConfig.put("streams."+systemStream+".samza.system", systemStream);
-    streamConfig.put("streams."+systemStream+".dataset", Base64Serializer.serializeUnchecked(collection)); // THIS HAS TO BE CHANGED, FEED DIRECTLY
-    streamConfig.put("streams."+systemStream+".partitionCount", String.valueOf(partitionCount));
+    streamConfig.put("streams."+systemStream+".samza.system", systemName);
+
     // Ensure task reads the input
     streamConfig.put(TaskConfig.INPUT_STREAMS(), systemName+"."+systemStream);
-    // Initialize the input
-    StreamSpec spec = new StreamSpec(this.systemStream, this.systemStream, this.systemName, this.partitionCount);
+    // Initialize the input by spinning up a producer
     InMemorySystemFactory factory = new InMemorySystemFactory();
-    factory.getAdmin(this.systemName, new MapConfig(streamConfig)).createStream(spec);
+    collection.forEach(T -> {
+      factory.getProducer(systemName, new MapConfig(streamConfig), null)
+          .send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), T));
+    });
+
   }
 
   public CollectionStream(String systemStream) {
@@ -45,6 +48,22 @@ public class CollectionStream<T> {
     this.systemName = TestStreamTask.SYSTEM_NAME;
     this.streamConfig = new HashMap<>();
     streamConfig.put("streams."+systemStream+".samza.system", systemName);
+  }
+
+  public String getSystemStream() {
+    return systemStream;
+  }
+
+  public void setSystemStream(String systemStream) {
+    this.systemStream = systemStream;
+  }
+
+  public String getSystemName() {
+    return systemName;
+  }
+
+  public void setSystemName(String systemName) {
+    this.systemName = systemName;
   }
 
   public Map<String, String> getStreamConfig() {
@@ -61,5 +80,13 @@ public class CollectionStream<T> {
 
   public static <T> CollectionStream<T> of(String systemStream, List<T> collection){
     return new CollectionStream<>(systemStream, collection, 1);
+  }
+
+  public static <K, V> CollectionStream<KV<K, V>> of(String systemStream, Map<K, V> elems) {
+    List<KV<K, V>> kvs = new ArrayList<>(elems.size());
+    for (Map.Entry<K, V> entry : elems.entrySet()) {
+      kvs.add(KV.of(entry.getKey(), entry.getValue()));
+    }
+    return of(systemStream, kvs);
   }
 }
