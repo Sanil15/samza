@@ -1,13 +1,9 @@
 package org.apache.samza.test.framework;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
-import javax.swing.text.TableView;
-import org.apache.samza.config.MapConfig;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.SystemStream;
@@ -47,13 +43,15 @@ public class TestMain {
     };
 
     // Run the test framework
-    TestStreamTask
-        .create(task, new HashMap<>())
+    TestTask
+        .create("test-samza", task, new HashMap<>())
+        .configureContainerThreadPool(4)
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
-        .run();
+        .runSync();
+
     try {
-      TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews);
+      TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews.subList(0,3));
     } catch (InterruptedException e) {
       e.printStackTrace();
     }

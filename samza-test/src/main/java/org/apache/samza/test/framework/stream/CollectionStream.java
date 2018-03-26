@@ -15,7 +15,8 @@ import org.apache.samza.system.SystemStream;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.system.inmemory.InMemorySystemProducer;
 import org.apache.samza.test.framework.Base64Serializer;
-import org.apache.samza.test.framework.TestStreamTask;
+import org.apache.samza.test.framework.TestTask;
+
 
 public class CollectionStream<T> {
   private Collection<T> collection;
@@ -26,7 +27,7 @@ public class CollectionStream<T> {
 
   public CollectionStream(String systemStream, List<T> collection, Integer partitionCount) {
     this.systemStream = systemStream;
-    this.systemName = TestStreamTask.SYSTEM_NAME;
+    this.systemName = TestTask.systemName;
     this.streamConfig = new HashMap<>();
     this.collection = collection;
     this.partitionCount = partitionCount;
@@ -45,7 +46,7 @@ public class CollectionStream<T> {
 
   public CollectionStream(String systemStream) {
     this.systemStream = systemStream;
-    this.systemName = TestStreamTask.SYSTEM_NAME;
+    this.systemName = TestTask.systemName;
     this.streamConfig = new HashMap<>();
     streamConfig.put("streams."+systemStream+".samza.system", systemName);
   }
