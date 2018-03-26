@@ -12,12 +12,14 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.test.framework.stream.CollectionStream;
+import org.junit.Test;
 
 
-public class TestMain {
+public class SampleSyncTaskTest {
   private static final String[] PAGEKEYS = {"inbox", "home", "search", "pymk", "group", "job"};
 
-  public static void main(String args[]){
+  @Test
+  public void testSyncTask() throws Exception{
     // Create a sample data
     Random random = new Random();
     int count = 10;
@@ -37,7 +39,6 @@ public class TestMain {
       @Override
       public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) throws Exception {
         PageView obj = (PageView)envelope.getMessage();
-        System.out.println("* Processing: "+obj.getPageKey() +" Member Id: "+obj.getMemberId());
         collector.send(new OutgoingMessageEnvelope(new SystemStream("test-samza","Output"), obj));
       }
     };
@@ -45,15 +46,10 @@ public class TestMain {
     // Run the test framework
     TestTask
         .create("test-samza", task, new HashMap<>())
-        .configureContainerThreadPool(4)
+        .setJobContainerThreadPoolSize(4)
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
-        .runSync();
-
-    try {
-      TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews.subList(0,3));
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
+        .run();
+    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews.subList(0,3));
   }
 }

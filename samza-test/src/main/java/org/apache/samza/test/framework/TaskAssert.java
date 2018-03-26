@@ -13,10 +13,9 @@ import org.apache.samza.system.SystemStreamMetadata;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.system.inmemory.InMemorySystemConsumer;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
-import org.hamcrest.Matchers;
 import org.hamcrest.collection.IsIterableContainingInAnyOrder;
-
 import static org.junit.Assert.*;
+import static org.hamcrest.CoreMatchers.*;
 
 
 public class TaskAssert<T> {
@@ -34,8 +33,7 @@ public class TaskAssert<T> {
   }
 
 
-  public void containsInAnyOrder(List<? extends Object> expected) throws InterruptedException {
-    TimeUnit.SECONDS.sleep(1);
+  public List<T> consume() throws InterruptedException{
     InMemorySystemFactory factory = new InMemorySystemFactory();
     Set<SystemStreamPartition> ssps = new HashSet<>();
     Set<String> streamNames = new HashSet<>();
@@ -47,24 +45,23 @@ public class TaskAssert<T> {
       ssps.add(temp);
       consumer.register(temp, null);
     });
-    try {
-      Map<SystemStreamPartition, List<IncomingMessageEnvelope>> output = consumer.poll(ssps, 10);
-      List<T> outputCollection = output
-          .values()
-          .stream()
-          .flatMap(List::stream)
-          .map(e -> {
-            return (T)e.getMessage();
-          })
-          .collect(Collectors.toList());
-      System.out.println(outputCollection);
-      assertThat(outputCollection, IsIterableContainingInAnyOrder.containsInAnyOrder(expected.toArray()));
-      //assertThat(outputCollection, Matchers.containsInAnyOrder((T[]) expected.toArray()));
+    Map<SystemStreamPartition, List<IncomingMessageEnvelope>> output = consumer.poll(ssps, 10);
+    return output
+        .values()
+        .stream()
+        .flatMap(List::stream)
+        .map(e -> {
+          return (T)e.getMessage();
+        })
+        .collect(Collectors.toList());
+  }
 
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
+  public void containsInAnyOrder(List<? extends Object> expected) throws InterruptedException {
+    assertThat(consume(), IsIterableContainingInAnyOrder.containsInAnyOrder(expected.toArray()));
+  }
 
+  public void contains(List<? extends Object> expected) throws InterruptedException {
+    assertThat(consume(), is(expected.toArray()));
   }
 
 }

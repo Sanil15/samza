@@ -76,16 +76,20 @@ public class TestTask {
     return new TestTask(systemName, task, config);
   }
 
+  public static TestTask create(String systemName, AsyncStreamTask task, HashMap<String, String> config) {
+    return new TestTask(systemName, task, config);
+  }
+
   // Thread pool to run synchronous tasks in parallel.
   // Ordering is guarenteed
-  public TestTask configureContainerThreadPool(Integer value) {
+  public TestTask setJobContainerThreadPoolSize(Integer value) {
     Preconditions.checkNotNull(value);
     _config.put("job.container.thread.pool.size", String.valueOf(value));
     return this;
   }
 
   // Timeout for processAsync() callback. When the timeout happens, it will throw a TaskCallbackTimeoutException and shut down the container.
-  public TestTask configureAsyncCallBackTimeout(Integer value) {
+  public TestTask setTaskCallBackTimeoutMS(Integer value) {
     Preconditions.checkNotNull(value);
     _config.put("task.callback.timeout.ms", String.valueOf(value));
     return this;
@@ -93,7 +97,7 @@ public class TestTask {
 
   // Max number of outstanding messages being processed per task at a time, applicable to both StreamTask and AsyncStreamTask.
   // Ordering is not guarenteed per partition
-  public TestTask configureTaskConcurrency(Integer value) {
+  public TestTask setTaskMaxConcurrency(Integer value) {
     Preconditions.checkNotNull(value);
     _config.put("task.max.concurrency", String.valueOf(value));
     return this;
@@ -111,15 +115,15 @@ public class TestTask {
     return this;
   }
 
-  public void runSync() {
+  public void run() throws Exception {
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(_config));
-    runner.runSyncTask(syncTask);
+    if (syncTask != null && asyncTask == null) {
+      runner.runSyncTask(syncTask);
+    } else if(asyncTask != null && syncTask == null) {
+      runner.runAsyncTask(asyncTask);
+    } else {
+      throw new Exception("Test should use either one config async or sync, not both");
+    }
   }
-
-  public void runAsync() {
-    final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(_config));
-    runner.runAsyncTask(asyncTask);
-  }
-
 
 }
