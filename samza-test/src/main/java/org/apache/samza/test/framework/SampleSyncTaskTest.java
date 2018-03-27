@@ -50,6 +50,6 @@ public class SampleSyncTaskTest {
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
         .run();
-    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews.subList(0,3));
+    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews);
   }
 }

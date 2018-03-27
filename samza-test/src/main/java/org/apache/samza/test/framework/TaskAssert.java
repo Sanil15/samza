@@ -16,6 +16,7 @@ import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.hamcrest.collection.IsIterableContainingInAnyOrder;
 import static org.junit.Assert.*;
 import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 
 
 public class TaskAssert<T> {
@@ -34,6 +35,7 @@ public class TaskAssert<T> {
 
 
   public List<T> consume() throws InterruptedException{
+    // TimeUnit.SECONDS.sleep(1); // without this there is an exception
     InMemorySystemFactory factory = new InMemorySystemFactory();
     Set<SystemStreamPartition> ssps = new HashSet<>();
     Set<String> streamNames = new HashSet<>();
@@ -50,9 +52,7 @@ public class TaskAssert<T> {
         .values()
         .stream()
         .flatMap(List::stream)
-        .map(e -> {
-          return (T)e.getMessage();
-        })
+        .map(e -> (T)e.getMessage())
         .collect(Collectors.toList());
   }
 
@@ -62,6 +62,10 @@ public class TaskAssert<T> {
 
   public void contains(List<? extends Object> expected) throws InterruptedException {
     assertThat(consume(), is(expected.toArray()));
+  }
+
+  public void size(Integer size) throws InterruptedException {
+    assertThat(consume(), hasSize(size));
   }
 
 }

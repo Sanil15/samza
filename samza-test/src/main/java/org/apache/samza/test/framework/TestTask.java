@@ -119,8 +119,10 @@ public class TestTask {
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(_config));
     if (syncTask != null && asyncTask == null) {
       runner.runSyncTask(syncTask);
+      runner.waitForFinish();
     } else if(asyncTask != null && syncTask == null) {
       runner.runAsyncTask(asyncTask);
+      runner.waitForFinish();
     } else {
       throw new Exception("Test should use either one config async or sync, not both");
     }

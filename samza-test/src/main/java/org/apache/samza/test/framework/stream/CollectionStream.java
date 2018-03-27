@@ -8,10 +8,13 @@ import java.util.Map;
 import org.apache.samza.config.MapConfig;
 import org.apache.samza.config.TaskConfig;
 import org.apache.samza.operators.KV;
+import org.apache.samza.system.EndOfStreamMessage;
+import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.StreamSpec;
 import org.apache.samza.system.SystemProducer;
 import org.apache.samza.system.SystemStream;
+import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.system.inmemory.InMemorySystemProducer;
 import org.apache.samza.test.framework.Base64Serializer;
@@ -36,12 +39,12 @@ public class CollectionStream<T> {
     // Ensure task reads the input
     streamConfig.put(TaskConfig.INPUT_STREAMS(), systemName+"."+systemStream);
     // Initialize the input by spinning up a producer
-    InMemorySystemFactory factory = new InMemorySystemFactory();
+    SystemProducer producer= new InMemorySystemFactory()
+        .getProducer(systemName, new MapConfig(streamConfig), null);
     collection.forEach(T -> {
-      factory.getProducer(systemName, new MapConfig(streamConfig), null)
-          .send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), T));
+      producer.send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), T));
     });
-
+    producer.send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), new EndOfStreamMessage(null)));
   }
 
   public CollectionStream(String systemStream) {
