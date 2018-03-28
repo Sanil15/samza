@@ -21,10 +21,8 @@ package org.apache.samza.test.controlmessages;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import org.apache.samza.application.StreamApplication;
 import org.apache.samza.config.JobConfig;
 import org.apache.samza.config.JobCoordinatorConfig;
 import org.apache.samza.config.MapConfig;
@@ -35,10 +33,17 @@ import org.apache.samza.operators.functions.MapFunction;
 import org.apache.samza.runtime.LocalApplicationRunner;
 import org.apache.samza.standalone.PassthroughCoordinationUtilsFactory;
 import org.apache.samza.standalone.PassthroughJobCoordinatorFactory;
+import org.apache.samza.system.IncomingMessageEnvelope;
+import org.apache.samza.system.OutgoingMessageEnvelope;
+import org.apache.samza.system.StreamSpec;
+import org.apache.samza.system.SystemStream;
+import org.apache.samza.task.MessageCollector;
+import org.apache.samza.task.StreamTask;
+import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.test.controlmessages.TestData.PageView;
 import org.apache.samza.test.controlmessages.TestData.PageViewJsonSerdeFactory;
+import org.apache.samza.test.framework.factory.InMemorySystemFactoryTest;
 import org.apache.samza.test.harness.AbstractIntegrationTestHarness;
-import org.apache.samza.test.util.ArraySystemFactory;
 import org.apache.samza.test.util.Base64Serializer;
 import org.junit.Test;
 
@@ -57,51 +62,96 @@ public class EndOfStreamIntegrationTest extends AbstractIntegrationTestHarness {
   public void testPipeline() throws  Exception {
     Random random = new Random();
     int count = 10;
-    PageView[] pageviews = new PageView[count];
+    ArrayList<PageView> pageviews = new ArrayList<>();
     for (int i = 0; i < count; i++) {
       String pagekey = PAGEKEYS[random.nextInt(PAGEKEYS.length - 1)];
       int memberId = random.nextInt(10);
-      pageviews[i] = new PageView(pagekey, memberId);
+      pageviews.add(new PageView(pagekey, memberId));
     }
 
     int partitionCount = 4;
     Map<String, String> configs = new HashMap<>();
-    configs.put("systems.test.samza.factory", ArraySystemFactory.class.getName());
+    configs.put("systems.test.samza.factory", InMemorySystemFactoryTest.class.getName());
     configs.put("streams.PageView.samza.system", "test");
-    configs.put("streams.PageView.source", Base64Serializer.serialize(pageviews));
+    configs.put("streams.PageView.dataset", Base64Serializer.serialize(pageviews));
     configs.put("streams.PageView.partitionCount", String.valueOf(partitionCount));
+
+    configs.put("streams.Output.samza.system", "test");
 
     configs.put(JobConfig.JOB_NAME(), "test-eos-job");
     configs.put(JobConfig.PROCESSOR_ID(), "1");
     configs.put(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
     configs.put(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
     configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
-
-    configs.put("systems.kafka.samza.factory", "org.apache.samza.system.kafka.KafkaSystemFactory");
-    configs.put("systems.kafka.producer.bootstrap.servers", bootstrapUrl());
-    configs.put("systems.kafka.consumer.zookeeper.connect", zkConnect());
-    configs.put("systems.kafka.samza.key.serde", "int");
-    configs.put("systems.kafka.samza.msg.serde", "json");
-    configs.put("systems.kafka.default.stream.replication.factor", "1");
-    configs.put("job.default.system", "kafka");
+    configs.put("job.default.system", "test");
 
     configs.put("serializers.registry.int.class", "org.apache.samza.serializers.IntegerSerdeFactory");
     configs.put("serializers.registry.json.class", PageViewJsonSerdeFactory.class.getName());
 
-    final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
-    List<PageView> received = new ArrayList<>();
-    final StreamApplication app = (streamGraph, cfg) -> {
-      streamGraph.<KV<String, PageView>>getInputStream("PageView")
-        .map(Values.create())
-        .partitionBy(pv -> pv.getMemberId(), pv -> pv, "p1")
-        .sink((m, collector, coordinator) -> {
-            received.add(m.getValue());
-          });
-    };
-    runner.run(app);
-    runner.waitForFinish();
+    // create the initial stream, this is consumed by in memory system
+    StreamSpec spec = new StreamSpec("PageView","PageView","test",4);
+    InMemorySystemFactoryTest factoryTest = new InMemorySystemFactoryTest();
+    factoryTest.getAdmin("test", new MapConfig(configs)).createStream(spec);
 
-    assertEquals(received.size(), count * partitionCount);
+//    configs.put("task.class", TestStreamTask.class.getName());
+    configs.put("task.inputs", "test.PageView");
+    configs.put("systems.test.PageView.samza.offset.default","oldest");
+
+    final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
+
+    StreamTask task = new StreamTask() {
+      @Override
+      public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) throws Exception {
+        Map<String,Object> outgoing = new HashMap<>();
+        System.out.println("----------------------------------------"+envelope.getMessage()+"-----------------------------");
+        outgoing.put((String) envelope.getKey(),envelope.getMessage());
+        collector.send(new OutgoingMessageEnvelope(new SystemStream("test","Output"), outgoing));
+      }
+    };
+
+    LocalApplicationRunner app = new LocalApplicationRunner(new MapConfig(configs));
+    app.runTask(task);
+    app.waitForFinish();
+
+
+//    int partitionCount = 4;
+//    Map<String, String> configs = new HashMap<>();
+//    configs.put("systems.test.samza.factory", ArraySystemFactory.class.getName());
+//    configs.put("streams.PageView.samza.system", "test");
+//    configs.put("streams.PageView.source", Base64Serializer.serialize(pageviews));
+//    configs.put("streams.PageView.partitionCount", String.valueOf(partitionCount));
+//
+//    configs.put(JobConfig.JOB_NAME(), "test-eos-job");
+//    configs.put(JobConfig.PROCESSOR_ID(), "1");
+//    configs.put(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
+//    configs.put(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
+//    configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+//
+//    configs.put("systems.kafka.samza.factory", "org.apache.samza.system.kafka.KafkaSystemFactory");
+//    configs.put("systems.kafka.producer.bootstrap.servers", bootstrapUrl());
+//    configs.put("systems.kafka.consumer.zookeeper.connect", zkConnect());
+//    configs.put("systems.kafka.samza.key.serde", "int");
+//    configs.put("systems.kafka.samza.msg.serde", "json");
+//    configs.put("systems.kafka.default.stream.replication.factor", "1");
+//    configs.put("job.default.system", "kafka");
+//
+//    configs.put("serializers.registry.int.class", "org.apache.samza.serializers.IntegerSerdeFactory");
+//    configs.put("serializers.registry.json.class", PageViewJsonSerdeFactory.class.getName());
+//
+//    final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
+//    List<PageView> received = new ArrayList<>();
+//    final StreamApplication app = (streamGraph, cfg) -> {
+//      streamGraph.<KV<String, PageView>>getInputStream("PageView")
+//        .map(Values.create())
+//        .partitionBy(pv -> pv.getMemberId(), pv -> pv, "p1")
+//        .sink((m, collector, coordinator) -> {
+//            received.add(m.getValue());
+//          });
+//    };
+//    runner.run(app);
+//    runner.waitForFinish();
+//
+//    assertEquals(received.size(), count * partitionCount);
   }
 
   public static final class Values {

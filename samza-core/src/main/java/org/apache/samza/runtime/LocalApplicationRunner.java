@@ -43,7 +43,9 @@ import org.apache.samza.job.ApplicationStatus;
 import org.apache.samza.processor.StreamProcessor;
 import org.apache.samza.processor.StreamProcessorLifecycleListener;
 import org.apache.samza.system.StreamSpec;
+import org.apache.samza.task.AsyncStreamTask;
 import org.apache.samza.task.AsyncStreamTaskFactory;
+import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.StreamTaskFactory;
 import org.apache.samza.task.TaskFactoryUtil;
 import org.slf4j.Logger;
@@ -139,6 +141,50 @@ public class LocalApplicationRunner extends AbstractApplicationRunner {
 
     StreamProcessor processor = createStreamProcessor(jobConfig, null, listener);
 
+    numProcessorsToStart.set(1);
+    listener.setProcessor(processor);
+    processor.start();
+  }
+
+  public void runSyncTask(StreamTask task) {
+    JobConfig jobConfig = new JobConfig(this.config);
+
+    if (task == null) {
+      throw new SamzaException("Task is null");
+    }
+    LOG.info("LocalApplicationRunner will run StreamTask");
+    LocalStreamProcessorLifeCycleListener listener = new LocalStreamProcessorLifeCycleListener();
+
+    StreamTaskFactory fac = new StreamTaskFactory() {
+      @Override
+      public StreamTask createInstance() {
+        return task;
+      }
+    };
+    StreamProcessor processor = new StreamProcessor(
+        this.config, new HashMap<>(), fac, listener);
+    numProcessorsToStart.set(1);
+    listener.setProcessor(processor);
+    processor.start();
+  }
+
+  public void runAsyncTask(AsyncStreamTask task) {
+    JobConfig jobConfig = new JobConfig(this.config);
+
+    if (task == null) {
+      throw new SamzaException("Task is null");
+    }
+    LOG.info("LocalApplicationRunner will run StreamTask");
+    LocalStreamProcessorLifeCycleListener listener = new LocalStreamProcessorLifeCycleListener();
+
+    AsyncStreamTaskFactory fac = new AsyncStreamTaskFactory() {
+      @Override
+      public AsyncStreamTask createInstance() {
+        return task;
+      }
+    };
+    StreamProcessor processor = new StreamProcessor(
+        this.config, new HashMap<>(), fac, listener);
     numProcessorsToStart.set(1);
     listener.setProcessor(processor);
     processor.start();
