@@ -73,6 +73,8 @@ public class InMemoryManager {
     int startingOffset = Integer.parseInt(offset);
     List<IncomingMessageEnvelope> messageEnvelopesForSSP = bufferedMessages.getOrDefault(ssp, new LinkedList<>());
 
+    messageEnvelopesForSSP.add(IncomingMessageEnvelope.buildEndOfStreamEnvelope(ssp));
+
     // we are at head and nothing to return
     if (startingOffset >= messageEnvelopesForSSP.size()) {
       return new LinkedList<>();

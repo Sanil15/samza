@@ -8,14 +8,15 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.samza.config.MapConfig;
+import org.apache.samza.system.EndOfStreamMessage;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamMetadata;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.system.inmemory.InMemorySystemConsumer;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.hamcrest.collection.IsIterableContainingInAnyOrder;
+import org.hamcrest.collection.IsIterableContainingInOrder;
 import static org.junit.Assert.*;
-import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 
 
@@ -53,6 +54,7 @@ public class TaskAssert<T> {
         .stream()
         .flatMap(List::stream)
         .map(e -> (T)e.getMessage())
+        .filter(e -> !(e instanceof EndOfStreamMessage))
         .collect(Collectors.toList());
   }
 
@@ -61,7 +63,7 @@ public class TaskAssert<T> {
   }
 
   public void contains(List<? extends Object> expected) throws InterruptedException {
-    assertThat(consume(), is(expected.toArray()));
+    assertThat(consume(), IsIterableContainingInOrder.contains(expected.toArray()));
   }
 
   public void size(Integer size) throws InterruptedException {

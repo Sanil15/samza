@@ -44,7 +44,6 @@ public class CollectionStream<T> {
     collection.forEach(T -> {
       producer.send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), T));
     });
-    producer.send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), new EndOfStreamMessage(null)));
   }
 
   public CollectionStream(String systemStream) {

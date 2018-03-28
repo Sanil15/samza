@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
@@ -24,6 +26,7 @@ public class SampleAsyncTaskTest {
   private static final String[] PAGEKEYS = {"inbox", "home", "search", "pymk", "group", "job"};
 
   public static class AsyncRestTask implements AsyncStreamTask, InitableTask, ClosableTask {
+
     @Override
     public void init(Config config, TaskContext taskContext) throws Exception {
       // Your initialization of web client code goes here
@@ -32,20 +35,14 @@ public class SampleAsyncTaskTest {
     @Override
     public void processAsync(IncomingMessageEnvelope envelope, MessageCollector collector,
         TaskCoordinator coordinator, final TaskCallback callback) {
-
-      try { // Mimic a callback delay
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-
-      InMemorySystemUtils.PageView obj = (InMemorySystemUtils.PageView) envelope.getMessage();
-      collector.send(new OutgoingMessageEnvelope(new SystemStream("test-samza", "Output"), obj));
+        // Mimic a random callback delay ans send message
+        RestCall call = new RestCall(envelope, collector, callback);
+        call.start();
     }
 
     @Override
     public void close() throws Exception {
-      // client.close();
+      // Close your client
     }
   }
 
@@ -65,10 +62,40 @@ public class SampleAsyncTaskTest {
     // Run the test framework
     TestTask
         .create("test-samza", new AsyncRestTask(), new HashMap<>())
-        .setJobContainerThreadPoolSize(4)
+        .setTaskCallBackTimeoutMS(200)
+        .setTaskMaxConcurrency(4)
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
         .run();
-    TaskAssert.that("test-samza", "Output").size(pageviews.size());
+
+    TaskAssert.that("test-samza", "Output").contains(pageviews);
+
   }
+}
+
+class RestCall extends Thread{
+  static Random random = new Random();
+  IncomingMessageEnvelope _envelope;
+  MessageCollector _messageCollector;
+  TaskCallback _callback;
+  RestCall(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCallback callback){
+    this._envelope = envelope;
+    this._callback = callback;
+    this._messageCollector = collector;
+  }
+  @Override
+  public void run(){
+    System.out.println("Running " +  this.getName());
+    try {
+        // Let the thread sleep for a while.
+        Thread.sleep(random.nextInt(150));
+    } catch (InterruptedException e) {
+      System.out.println("Thread " +  this.getName() + " interrupted.");
+    }
+    System.out.println("Thread " +  this.getName() + " exiting.");
+    InMemorySystemUtils.PageView obj = (InMemorySystemUtils.PageView) _envelope.getMessage();
+    _messageCollector.send(new OutgoingMessageEnvelope(new SystemStream("test-samza", "Output"), obj));
+    _callback.complete();
+  }
+
 }
