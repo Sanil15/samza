@@ -1,11 +1,9 @@
-package org.apache.samza.test.framework;
+package org.apache.samza.test.framework.examples;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
@@ -18,6 +16,9 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.TaskCallback;
 import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
+import org.apache.samza.system.framework.utils.TaskAssert;
+import org.apache.samza.test.framework.Mode;
+import org.apache.samza.test.framework.TestTask;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
 
@@ -47,7 +48,7 @@ public class SampleAsyncTaskTest {
   }
 
   @Test
-  public void testAsyncTask() throws Exception{
+  public void testAsyncTaskWithConcurrency() throws Exception{
     Random random = new Random();
     int count = 10;
     List<InMemorySystemUtils.PageView> pageviews = new ArrayList<>();
@@ -61,14 +62,14 @@ public class SampleAsyncTaskTest {
 
     // Run the test framework
     TestTask
-        .create("test-samza", new AsyncRestTask(), new HashMap<>())
+        .create("test-samza", new AsyncRestTask(), new HashMap<>(), Mode.SINGLE_CONTAINER)
         .setTaskCallBackTimeoutMS(200)
         .setTaskMaxConcurrency(4)
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
         .run();
 
-    TaskAssert.that("test-samza", "Output").contains(pageviews);
+    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews);
 
   }
 }

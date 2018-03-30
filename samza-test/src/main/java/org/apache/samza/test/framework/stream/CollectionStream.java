@@ -8,57 +8,68 @@ import java.util.Map;
 import org.apache.samza.config.MapConfig;
 import org.apache.samza.config.TaskConfig;
 import org.apache.samza.operators.KV;
-import org.apache.samza.system.EndOfStreamMessage;
-import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
-import org.apache.samza.system.StreamSpec;
 import org.apache.samza.system.SystemProducer;
 import org.apache.samza.system.SystemStream;
-import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
-import org.apache.samza.system.inmemory.InMemorySystemProducer;
-import org.apache.samza.test.framework.Base64Serializer;
 import org.apache.samza.test.framework.TestTask;
 
 
 public class CollectionStream<T> {
-  private Collection<T> collection;
+  private Collection collection;
   private Map<String,String> streamConfig;
   private String systemStream;
   private String systemName;
   private Integer partitionCount;
 
-  public CollectionStream(String systemStream, List<T> collection, Integer partitionCount) {
+  private CollectionStream(String systemStream, List<T> collection, Integer partitionCount) {
     this.systemStream = systemStream;
     this.systemName = TestTask.systemName;
     this.streamConfig = new HashMap<>();
     this.collection = collection;
     this.partitionCount = partitionCount;
     streamConfig.put("streams."+systemStream+".samza.system", systemName);
-
     // Ensure task reads the input
     streamConfig.put(TaskConfig.INPUT_STREAMS(), systemName+"."+systemStream);
     // Initialize the input by spinning up a producer
     SystemProducer producer= new InMemorySystemFactory()
         .getProducer(systemName, new MapConfig(streamConfig), null);
     collection.forEach(T -> {
-      producer.send(null, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream), T));
+      Object key = T instanceof Map.Entry ? ((Map.Entry) T).getKey() : null;
+      Object value = T instanceof Map.Entry ? ((Map.Entry) T).getValue() : T;
+      producer.send(systemStream, new OutgoingMessageEnvelope(new SystemStream(systemName,systemStream),"0",key, value));
     });
   }
 
-  public CollectionStream(String systemStream) {
+  private CollectionStream(String systemStream) {
     this.systemStream = systemStream;
     this.systemName = TestTask.systemName;
     this.streamConfig = new HashMap<>();
     streamConfig.put("streams."+systemStream+".samza.system", systemName);
   }
 
-  public String getSystemStream() {
-    return systemStream;
-  }
-
-  public void setSystemStream(String systemStream) {
+  private CollectionStream(String systemStream, List<List<T>> collection) {
     this.systemStream = systemStream;
+    this.systemName = TestTask.systemName;
+    this.streamConfig = new HashMap<>();
+    this.collection = collection;
+    this.partitionCount = collection.size();
+    streamConfig.put("streams."+systemStream+".samza.system", systemName);
+    // Ensure task reads the input
+    streamConfig.put(TaskConfig.INPUT_STREAMS(), systemName+"."+systemStream);
+    // Initialize the input by spinning up a producer
+    SystemProducer producer= new InMemorySystemFactory()
+        .getProducer(systemName, new MapConfig(streamConfig), null);
+    int i=0;
+    // i needs to be effectively final in lambda
+    for(List<T> partition: collection) {
+      for(Object T : partition) {
+        Object key = T instanceof Map.Entry ? ((Map.Entry) T).getKey() : null;
+        Object value = T instanceof Map.Entry ? ((Map.Entry) T).getValue() : T;
+        producer.send(systemName, new OutgoingMessageEnvelope(new SystemStream(systemName, systemStream), Integer.valueOf(i),key, value));
+      }
+      i++;
+    }
   }
 
   public String getSystemName() {
@@ -71,10 +82,6 @@ public class CollectionStream<T> {
 
   public Map<String, String> getStreamConfig() {
     return streamConfig;
-  }
-
-  public void setStreamConfig(Map<String, String> streamConfig) {
-    this.streamConfig = streamConfig;
   }
 
   public static <T> CollectionStream<T> empty(String systemStream) {
@@ -91,5 +98,9 @@ public class CollectionStream<T> {
       kvs.add(KV.of(entry.getKey(), entry.getValue()));
     }
     return of(systemStream, kvs);
+  }
+
+  public static <T> CollectionStream<T> ofPartitions(String systemStream, List<List<T>> collection){
+    return new CollectionStream<>(systemStream, collection);
   }
 }

@@ -72,7 +72,7 @@ import org.apache.samza.task.TaskContext;
  * See {@link InitableFunction} and {@link org.apache.samza.operators.functions.ClosableFunction}.
  */
 @InterfaceStability.Unstable
-public interface StreamApplication {
+public interface  StreamApplication {
 
   /**
    * Describes and initializes the transforms for processing message streams and generating results.

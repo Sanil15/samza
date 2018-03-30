@@ -1,4 +1,4 @@
-package org.apache.samza.test.framework;
+package org.apache.samza.test.framework.examples;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,6 +11,9 @@ import org.apache.samza.system.inmemory.InMemorySystemUtils.*;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
+import org.apache.samza.system.framework.utils.TaskAssert;
+import org.apache.samza.test.framework.Mode;
+import org.apache.samza.test.framework.TestTask;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
 
@@ -45,8 +48,9 @@ public class SampleSyncTaskTest {
 
     // Run the test framework
     TestTask
-        .create("test-samza", task, new HashMap<>())
+        .create("test-samza", task, new HashMap<>(), Mode.SINGLE_CONTAINER)
         .setJobContainerThreadPoolSize(4)
+        .setTaskMaxConcurrency(4)
         .addInputStream(CollectionStream.of("PageView", pageviews))
         .addOutputStream(CollectionStream.empty("Output"))
         .run();

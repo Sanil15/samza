@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.samza.test.framework;
+package org.apache.samza.system.framework.utils;
 
 import com.google.common.collect.Iterables;
 import org.apache.samza.config.Config;
