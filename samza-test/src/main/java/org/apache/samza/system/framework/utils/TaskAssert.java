@@ -1,5 +1,6 @@
 package org.apache.samza.system.framework.utils;
 
+import com.google.common.base.Preconditions;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,13 +25,14 @@ public class TaskAssert<T> {
   private String systemStream;
   private String systemName;
 
-  public TaskAssert(String systemName, String systemStream) {
-    this.systemStream = systemStream;
-    this.systemName = systemName;
+  private TaskAssert(String streamId) {
+    Preconditions.checkState(streamId.indexOf(".") > 0 && streamId.indexOf(".") < streamId.length() - 1);
+    this.systemStream = streamId.substring(streamId.indexOf(".") + 1);
+    this.systemName = streamId.substring(0, streamId.indexOf("."));
   }
 
-  public static <T> TaskAssert<T> that(String systemName, String systemStream) {
-    return new TaskAssert<>(systemName, systemStream);
+  public static <T> TaskAssert<T> that(String streamId) {
+    return new TaskAssert<>(streamId);
   }
 
   public List<T> consume() throws InterruptedException {

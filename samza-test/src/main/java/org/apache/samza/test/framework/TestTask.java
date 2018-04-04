@@ -16,53 +16,65 @@ import org.apache.samza.standalone.PassthroughJobCoordinatorFactory;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.task.AsyncStreamTask;
 import org.apache.samza.task.StreamTask;
+import org.apache.samza.task.TaskCallback;
 import org.apache.samza.test.framework.stream.CollectionStream;
 
 public class TestTask {
+  // Maintain the global job config
+  private HashMap<String, String> configs;
+  // Default job name
+  private static final String JOB_NAME = "test-task";
+  private static String SYSTEM_FACTORY = "systems.%s.samza.factory";
+  private static String SYSTEM_OFFSET = "systems.%s.default.stream.samza.offset.default";
+
+  // Either StreamTask or AsyncStreamTask exist
   private StreamTask syncTask;
   private AsyncStreamTask asyncTask;
-  public HashMap<String, String> configs;
-  private InMemorySystemFactory factoryTest;
-  private Mode mode;
-  public static String systemName;
-  public static final String JOB_NAME = "test-task";
 
-  private TestTask(String systemName, StreamTask task, HashMap<String, String> config, Mode mode) {
-    Preconditions.checkNotNull(systemName);
+  // InMemorySystemFactory
+  private InMemorySystemFactory factoryTest;
+  // Mode defines single or multi container
+  private Mode mode;
+
+
+  public void initialzeSystem(String systemName){
+    // System Factory InMemory System
+    configs.putIfAbsent(String.format(SYSTEM_FACTORY,systemName), InMemorySystemFactory.class.getName());
+    // Consume from the oldest for all streams in the system
+    configs.putIfAbsent(String.format(SYSTEM_OFFSET,systemName), "oldest");
+  }
+
+  private TestTask(StreamTask task, HashMap<String, String> config, Mode mode) {
     Preconditions.checkNotNull(task);
     Preconditions.checkNotNull(config);
-    this.systemName = systemName;
     this.syncTask = task;
     this.configs = config;
     this.mode = mode;
     factoryTest = new InMemorySystemFactory();
 
     // JOB Specific Config
-    configs.put(JobConfig.JOB_DEFAULT_SYSTEM(), systemName);
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
 
     if(mode.equals(mode.SINGLE_CONTAINER)) {
-      configs.put(JobConfig.PROCESSOR_ID(), "1");
+      configs.putIfAbsent(JobConfig.PROCESSOR_ID(), "1");
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
-      configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+      configs.putIfAbsent(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+    } else if(mode.equals(mode.MULTI_CONTAINER)){ // zk based config
+      // zk based config
     }
 
-    // InMemory System
-    configs.put("systems." + systemName + ".samza.factory", InMemorySystemFactory.class.getName()); // system factory
   }
 
-  private TestTask(String systemName, AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
-    Preconditions.checkNotNull(systemName);
+  private TestTask(AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
     Preconditions.checkNotNull(task);
     Preconditions.checkNotNull(config);
-    this.systemName = systemName;
     this.asyncTask = task;
     this.configs = config;
     factoryTest = new InMemorySystemFactory();
     this.mode = mode;
+
     // JOB Specific Config
-    configs.put(JobConfig.JOB_DEFAULT_SYSTEM(), systemName);
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
 
     if(mode.equals(mode.SINGLE_CONTAINER)) {
@@ -70,18 +82,18 @@ public class TestTask {
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
       configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+    } else if(mode.equals(mode.MULTI_CONTAINER)){ // zk based config
+      // zk based config
     }
 
-    // InMemory System
-    configs.put("systems." + systemName + ".samza.factory", InMemorySystemFactory.class.getName()); // system factory
   }
 
-  public static TestTask create(String systemName, StreamTask task, HashMap<String, String> config, Mode mode) {
-    return new TestTask(systemName, task, config, mode);
+  public static TestTask create(StreamTask task, HashMap<String, String> config, Mode mode) {
+    return new TestTask(task, config, mode);
   }
 
-  public static TestTask create(String systemName, AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
-    return new TestTask(systemName, task, config, mode);
+  public static TestTask create(AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
+    return new TestTask(task, config, mode);
   }
 
   // Thread pool to run synchronous tasks in parallel.
@@ -109,12 +121,18 @@ public class TestTask {
 
   public TestTask addInputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
-    configs.putAll(stream.getStreamConfig());
+    initialzeSystem(stream.getSystemName());
+    if(configs.containsKey(TaskConfig.INPUT_STREAMS()))
+      configs.put(TaskConfig.INPUT_STREAMS(), configs.get(TaskConfig.INPUT_STREAMS()).concat(","+stream.getStreamId()));
+    stream.getStreamConfig().forEach((key,val) -> {
+      configs.putIfAbsent((String)key, (String) val);
+    });
     return this;
   }
 
   public TestTask addOutputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
+    initialzeSystem(stream.getSystemName());
     configs.putAll(stream.getStreamConfig());
     return this;
   }

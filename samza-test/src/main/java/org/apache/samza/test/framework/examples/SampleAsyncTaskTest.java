@@ -62,14 +62,14 @@ public class SampleAsyncTaskTest {
 
     // Run the test framework
     TestTask
-        .create("test-samza", new AsyncRestTask(), new HashMap<>(), Mode.SINGLE_CONTAINER)
+        .create(new AsyncRestTask(), new HashMap<>(), Mode.SINGLE_CONTAINER)
         .setTaskCallBackTimeoutMS(200)
         .setTaskMaxConcurrency(4)
-        .addInputStream(CollectionStream.of("PageView", pageviews))
-        .addOutputStream(CollectionStream.empty("Output"))
+        .addInputStream(CollectionStream.of("test.PageView", pageviews))
+        .addOutputStream(CollectionStream.empty("test.Output"))
         .run();
 
-    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews);
+    TaskAssert.that("test.Output").containsInAnyOrder(pageviews);
 
   }
 }
@@ -95,7 +95,7 @@ class RestCall extends Thread{
     }
     System.out.println("Thread " +  this.getName() + " exiting.");
     InMemorySystemUtils.PageView obj = (InMemorySystemUtils.PageView) _envelope.getMessage();
-    _messageCollector.send(new OutgoingMessageEnvelope(new SystemStream("test-samza", "Output"), obj));
+    _messageCollector.send(new OutgoingMessageEnvelope(new SystemStream("test", "Output"), obj));
     _callback.complete();
   }
 

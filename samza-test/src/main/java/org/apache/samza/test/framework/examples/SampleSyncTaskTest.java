@@ -22,7 +22,7 @@ public class SampleSyncTaskTest {
   private static final String[] PAGEKEYS = {"inbox", "home", "search", "pymk", "group", "job"};
 
   @Test
-  public void testSyncTask() throws Exception{
+  public void testSyncTaskWithConcurrency() throws Exception{
     // Create a sample data
     Random random = new Random();
     int count = 10;
@@ -42,18 +42,19 @@ public class SampleSyncTaskTest {
       @Override
       public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) throws Exception {
         PageView obj = (PageView)envelope.getMessage();
-        collector.send(new OutgoingMessageEnvelope(new SystemStream("test-samza","Output"), obj));
+        collector.send(new OutgoingMessageEnvelope(new SystemStream("test","Output"), obj));
       }
     };
 
     // Run the test framework
     TestTask
-        .create("test-samza", task, new HashMap<>(), Mode.SINGLE_CONTAINER)
+        .create(task, new HashMap<>(), Mode.SINGLE_CONTAINER)
         .setJobContainerThreadPoolSize(4)
         .setTaskMaxConcurrency(4)
-        .addInputStream(CollectionStream.of("PageView", pageviews))
-        .addOutputStream(CollectionStream.empty("Output"))
+        .addInputStream(CollectionStream.of("test.SomeView", pageviews))
+        .addOutputStream(CollectionStream.empty("test.Output"))
         .run();
-    TaskAssert.that("test-samza", "Output").containsInAnyOrder(pageviews);
+
+    TaskAssert.that("test.Output").containsInAnyOrder(pageviews);
   }
 }

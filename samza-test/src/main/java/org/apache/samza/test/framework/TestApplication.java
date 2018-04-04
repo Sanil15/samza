@@ -42,10 +42,12 @@ public class TestApplication<T> {
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
 
     if(mode.equals(mode.SINGLE_CONTAINER)) {
-      configs.put(JobConfig.PROCESSOR_ID(), "1");
+      configs.putIfAbsent(JobConfig.PROCESSOR_ID(), "1");
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
       configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
-      configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+      configs.putIfAbsent(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+    } else if(mode.equals(mode.MULTI_CONTAINER)){
+
     }
 
     // InMemory System
