@@ -19,14 +19,23 @@
 
 package org.apache.samza.system.framework.utils;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 import org.apache.samza.config.Config;
+import org.apache.samza.config.MapConfig;
 import org.apache.samza.operators.MessageStream;
 import org.apache.samza.operators.functions.SinkFunction;
 import org.apache.samza.serializers.KVSerde;
 import org.apache.samza.serializers.Serde;
 import org.apache.samza.serializers.StringSerde;
+import org.apache.samza.system.EndOfStreamMessage;
+import org.apache.samza.system.IncomingMessageEnvelope;
+import org.apache.samza.system.SystemStreamMetadata;
 import org.apache.samza.system.SystemStreamPartition;
+import org.apache.samza.system.inmemory.InMemorySystemConsumer;
+import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
@@ -43,7 +52,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import org.hamcrest.collection.IsIterableContainingInAnyOrder;
+import org.hamcrest.collection.IsIterableContainingInOrder;
 
+import static org.hamcrest.collection.IsCollectionWithSize.*;
 import static org.junit.Assert.assertThat;
 
 /**
@@ -64,6 +76,9 @@ public class StreamAssert<M> {
   private final MessageStream<M> messageStream;
   private final Serde<M> serde;
   private boolean checkEachTask = false;
+  private String systemStream;
+  private String systemName;
+
 
   public static <M> StreamAssert<M> that(String id, MessageStream<M> messageStream, Serde<M> serde) {
     return new StreamAssert<>(id, messageStream, serde);
@@ -163,5 +178,97 @@ public class StreamAssert<M> {
         latch.countDown();
       }
     }
+  }
+
+
+  private StreamAssert(String streamId) {
+    Preconditions.checkState(streamId.indexOf(".") > 0 && streamId.indexOf(".") < streamId.length() - 1);
+    this.systemStream = streamId.substring(streamId.indexOf(".") + 1);
+    this.systemName = streamId.substring(0, streamId.indexOf("."));
+    this.id = streamId;
+    this.serde = null;
+    this.messageStream = null;
+  }
+
+  public static <M> StreamAssert<M> that(String streamId) {
+    return new StreamAssert<>(streamId);
+  }
+
+  public List<M> consume() throws InterruptedException {
+    InMemorySystemFactory factory = new InMemorySystemFactory();
+    Set<SystemStreamPartition> ssps = new HashSet<>();
+    Set<String> streamNames = new HashSet<>();
+    streamNames.add(systemStream);
+    Map<String, SystemStreamMetadata> metadata =
+        factory.getAdmin(systemName, new MapConfig()).getSystemStreamMetadata(streamNames);
+    InMemorySystemConsumer consumer =
+        (InMemorySystemConsumer) factory.getConsumer(systemName, new MapConfig(new HashMap<>()), null);
+    metadata.get(systemStream).getSystemStreamPartitionMetadata().keySet().forEach(partition -> {
+      SystemStreamPartition temp = new SystemStreamPartition(systemName, systemStream, partition);
+      ssps.add(temp);
+      consumer.register(temp, "0");
+    });
+    Map<SystemStreamPartition, List<IncomingMessageEnvelope>> output = consumer.poll(ssps, 10);
+    return output.values()
+        .stream()
+        .flatMap(List::stream)
+        .map(e -> (M) e.getMessage())
+        .filter(e -> !(e instanceof EndOfStreamMessage))
+        .collect(Collectors.toList());
+  }
+
+  public Map<Integer, List<M>> consumePartitions() throws InterruptedException {
+    InMemorySystemFactory factory = new InMemorySystemFactory();
+    Set<SystemStreamPartition> ssps = new HashSet<>();
+    Set<String> streamNames = new HashSet<>();
+    streamNames.add(systemStream);
+    Map<String, SystemStreamMetadata> metadata =
+        factory.getAdmin(systemName, new MapConfig()).getSystemStreamMetadata(streamNames);
+    InMemorySystemConsumer consumer =
+        (InMemorySystemConsumer) factory.getConsumer(systemName, new MapConfig(new HashMap<>()), null);
+    metadata.get(systemStream).getSystemStreamPartitionMetadata().keySet().forEach(partition -> {
+      SystemStreamPartition temp = new SystemStreamPartition(systemName, systemStream, partition);
+      ssps.add(temp);
+      consumer.register(temp, "0");
+    });
+    Map<SystemStreamPartition, List<IncomingMessageEnvelope>> output = consumer.poll(ssps, 10);
+    Map map = output.entrySet()
+        .stream()
+        .collect(Collectors.toMap(entry -> entry.getKey().getPartition().getPartitionId(), entry -> entry.getValue()
+            .stream()
+            .map(e -> (M) e.getMessage())
+            .filter(e -> !(e instanceof EndOfStreamMessage))
+            .collect(Collectors.toList())));
+    return map;
+  }
+
+  public void containsInAnyOrder(List<? extends M> expected) throws InterruptedException {
+    assertThat(consume(), IsIterableContainingInAnyOrder.containsInAnyOrder(expected.toArray()));
+  }
+
+  public void comparePartitionsInAnyOrder(List<? extends List> expected) throws InterruptedException {
+    Map<Integer, List<M>> actual = consumePartitions();
+    int i = 0;
+    for(List parition: expected){
+      assertThat(actual.get(i), IsIterableContainingInAnyOrder.containsInAnyOrder(parition.toArray()));
+      i++;
+    }
+  }
+
+  public void comparePartitionsInOrder(List<? extends List> expected) throws InterruptedException {
+    Map<Integer, List<M>> actual = consumePartitions();
+    int i = 0;
+    for(List parition: expected){
+      assertThat(actual.get(i), IsIterableContainingInOrder.contains(parition.toArray()));
+      i++;
+    }
+  }
+
+  public void contains(List<? extends M> expected) throws InterruptedException {
+    assertThat(consume(), IsIterableContainingInOrder.contains(expected.toArray()));
+  }
+
+  public void size(Integer size) throws InterruptedException {
+    assertThat(consume(), hasSize(size));
   }
 }

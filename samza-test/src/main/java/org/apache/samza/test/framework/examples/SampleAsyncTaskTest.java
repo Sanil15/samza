@@ -1,6 +1,7 @@
 package org.apache.samza.test.framework.examples;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
@@ -8,6 +9,7 @@ import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.SystemStream;
+import org.apache.samza.system.framework.utils.StreamAssert;
 import org.apache.samza.system.inmemory.InMemorySystemUtils;
 import org.apache.samza.task.AsyncStreamTask;
 import org.apache.samza.task.ClosableTask;
@@ -16,15 +18,14 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.TaskCallback;
 import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
-import org.apache.samza.system.framework.utils.TaskAssert;
 import org.apache.samza.test.framework.Mode;
 import org.apache.samza.test.framework.TestTask;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
+import scala.Int;
 
 
 public class SampleAsyncTaskTest {
-  private static final String[] PAGEKEYS = {"inbox", "home", "search", "pymk", "group", "job"};
 
   public static class AsyncRestTask implements AsyncStreamTask, InitableTask, ClosableTask {
 
@@ -49,27 +50,19 @@ public class SampleAsyncTaskTest {
 
   @Test
   public void testAsyncTaskWithConcurrency() throws Exception{
-    Random random = new Random();
-    int count = 10;
-    List<InMemorySystemUtils.PageView> pageviews = new ArrayList<>();
-
-    // Creating a sample data
-    for (int i = 0; i < count; i++) {
-      String pagekey = PAGEKEYS[random.nextInt(PAGEKEYS.length - 1)];
-      int memberId = random.nextInt(10);
-      pageviews.add(new InMemorySystemUtils.PageView(pagekey, memberId));
-    }
+    List<Integer> input = Arrays.asList(1,2,3,4,5);
+    List<Integer> output = Arrays.asList(10,20,30,40,50);
 
     // Run the test framework
     TestTask
         .create(new AsyncRestTask(), new HashMap<>(), Mode.SINGLE_CONTAINER)
         .setTaskCallBackTimeoutMS(200)
         .setTaskMaxConcurrency(4)
-        .addInputStream(CollectionStream.of("test.PageView", pageviews))
+        .addInputStream(CollectionStream.of("test.PageView", input))
         .addOutputStream(CollectionStream.empty("test.Output"))
         .run();
 
-    TaskAssert.that("test.Output").containsInAnyOrder(pageviews);
+    StreamAssert.that("test.Output").containsInAnyOrder(output);
 
   }
 }
@@ -94,8 +87,8 @@ class RestCall extends Thread{
       System.out.println("Thread " +  this.getName() + " interrupted.");
     }
     System.out.println("Thread " +  this.getName() + " exiting.");
-    InMemorySystemUtils.PageView obj = (InMemorySystemUtils.PageView) _envelope.getMessage();
-    _messageCollector.send(new OutgoingMessageEnvelope(new SystemStream("test", "Output"), obj));
+    Integer obj = (Integer) _envelope.getMessage();
+    _messageCollector.send(new OutgoingMessageEnvelope(new SystemStream("test", "Output"), obj * 10));
     _callback.complete();
   }
 

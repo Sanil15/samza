@@ -21,7 +21,7 @@ import org.apache.samza.test.framework.stream.CollectionStream;
 
 public class TestTask {
   // Maintain the global job config
-  private HashMap<String, String> configs;
+  private Map<String, String> configs;
   // Default job name
   private static final String JOB_NAME = "test-task";
   private static String SYSTEM_FACTORY = "systems.%s.samza.factory";
@@ -44,7 +44,7 @@ public class TestTask {
     configs.putIfAbsent(String.format(SYSTEM_OFFSET,systemName), "oldest");
   }
 
-  private TestTask(StreamTask task, HashMap<String, String> config, Mode mode) {
+  private TestTask(StreamTask task, Map<String, String> config, Mode mode) {
     Preconditions.checkNotNull(task);
     Preconditions.checkNotNull(config);
     this.syncTask = task;
@@ -66,7 +66,7 @@ public class TestTask {
 
   }
 
-  private TestTask(AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
+  private TestTask(AsyncStreamTask task, Map<String, String> config, Mode mode) {
     Preconditions.checkNotNull(task);
     Preconditions.checkNotNull(config);
     this.asyncTask = task;
