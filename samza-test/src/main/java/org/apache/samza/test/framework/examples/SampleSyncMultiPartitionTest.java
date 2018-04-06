@@ -1,8 +1,10 @@
 package org.apache.samza.test.framework.examples;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
@@ -15,6 +17,7 @@ import org.apache.samza.test.framework.Mode;
 import org.apache.samza.test.framework.TestTask;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
+import scala.Int;
 
 
 public class SampleSyncMultiPartitionTest {
@@ -22,16 +25,19 @@ public class SampleSyncMultiPartitionTest {
   @Test
   public void testSampleSyncMultiPartitionTestWithConcurrency() throws Exception {
     // Create a sample data
-    List<List<Integer>> list = new ArrayList<>();
-    List<List<Integer>> expected = new ArrayList<>();
+    Map<Integer, ArrayList<Integer>> input = new HashMap<Integer, ArrayList<Integer>>();
+    Map<Integer, ArrayList<Integer>> expected = new HashMap<Integer, ArrayList<Integer>>();
+
     for (int i = 0; i < 2; i++) {
-      list.add(new ArrayList<Integer>());
-      expected.add(new ArrayList<Integer>());
+      input.put(i,new ArrayList<Integer>());
+      expected.put(i, new ArrayList<Integer>());
       for (int j = 0; j < 4; j++) {
-        list.get(i).add(j);
+        input.get(i).add(j);
         expected.get(i).add(j * 10);
       }
     }
+    System.out.println(Arrays.asList(input));
+    System.out.println(Arrays.asList(expected));
 
     // Create a StreamTask
     StreamTask task = new StreamTask() {
@@ -47,12 +53,12 @@ public class SampleSyncMultiPartitionTest {
 
     // Run the test framework
     TestTask
-        .create(task, new HashMap<>(), Mode.SINGLE_CONTAINER)
-        .addInputStream(CollectionStream.ofPartitions("test.Integer", list))
+        .create(task)
+        .addInputStream(CollectionStream.of("test.Integer", input))
         .addOutputStream(CollectionStream.empty("test.Output"))
         .run();
 
-    StreamAssert.that("test.Output").comparePartitionsInOrder(expected);
+    StreamAssert.that("test.Output").contains(expected);
   }
 
 }

@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.SystemStream;
@@ -13,7 +12,6 @@ import org.apache.samza.system.inmemory.InMemorySystemUtils.*;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
-import org.apache.samza.test.framework.Mode;
 import org.apache.samza.test.framework.TestTask;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
@@ -32,19 +30,20 @@ public class SampleSyncTaskTest {
       @Override
       public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) throws Exception {
         Integer obj = (Integer)envelope.getMessage();
-        collector.send(new OutgoingMessageEnvelope(new SystemStream("test","Output"), obj * 10));
+        collector.send(new OutgoingMessageEnvelope(new SystemStream("test","output"), obj * 10));
       }
     };
 
-    // Run the test framework
+
     TestTask
-        .create(task, new HashMap<>(), Mode.SINGLE_CONTAINER)
+        .create(task)
+        .addInputStream(CollectionStream.of("test.input",input))
+        .addOutputStream(CollectionStream.empty("test.output"))
         .setJobContainerThreadPoolSize(4)
-        .setTaskMaxConcurrency(4)
-        .addInputStream(CollectionStream.of("test.SomeView", input))
-        .addOutputStream(CollectionStream.empty("test.Output"))
+        .setTaskMaxConcurrency(2)
         .run();
 
-    StreamAssert.that("test.Output").containsInAnyOrder(output);
+    StreamAssert.that("test.output").containsInAnyOrder(output);
+
   }
 }

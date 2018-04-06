@@ -55,14 +55,11 @@ public class TestTask {
     // JOB Specific Config
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
 
-    if(mode.equals(mode.SINGLE_CONTAINER)) {
-      configs.putIfAbsent(JobConfig.PROCESSOR_ID(), "1");
-      configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
-      configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
-      configs.putIfAbsent(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
-    } else if(mode.equals(mode.MULTI_CONTAINER)){ // zk based config
-      // zk based config
-    }
+    // Default Single Container configs
+    configs.putIfAbsent(JobConfig.PROCESSOR_ID(), "1");
+    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
+    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
+    configs.putIfAbsent(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
 
   }
 
@@ -77,23 +74,34 @@ public class TestTask {
     // JOB Specific Config
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
 
-    if(mode.equals(mode.SINGLE_CONTAINER)) {
-      configs.put(JobConfig.PROCESSOR_ID(), "1");
-      configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
-      configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
-      configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
-    } else if(mode.equals(mode.MULTI_CONTAINER)){ // zk based config
+    // Default Single Container configs
+    configs.put(JobConfig.PROCESSOR_ID(), "1");
+    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
+    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
+    configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
+
+  }
+
+  public static TestTask create(StreamTask task) {
+    return new TestTask(task, new HashMap<>(), Mode.SINGLE_CONTAINER);
+  }
+
+  public static TestTask create(AsyncStreamTask task) {
+    return new TestTask(task, new HashMap<>(), Mode.SINGLE_CONTAINER);
+  }
+
+  public TestTask addOverrideConfigs(Map<String,String> config) {
+    Preconditions.checkNotNull(config);
+    this.configs.putAll(config);
+    return this;
+  }
+
+  public TestTask setContainerMode(Mode mode) {
+    Preconditions.checkNotNull(mode);
+    if(mode.equals(Mode.MULTI_CONTAINER)){ // zk based config
       // zk based config
     }
-
-  }
-
-  public static TestTask create(StreamTask task, HashMap<String, String> config, Mode mode) {
-    return new TestTask(task, config, mode);
-  }
-
-  public static TestTask create(AsyncStreamTask task, HashMap<String, String> config, Mode mode) {
-    return new TestTask(task, config, mode);
+    return this;
   }
 
   // Thread pool to run synchronous tasks in parallel.

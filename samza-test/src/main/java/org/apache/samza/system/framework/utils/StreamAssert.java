@@ -194,7 +194,7 @@ public class StreamAssert<M> {
     return new StreamAssert<>(streamId);
   }
 
-  public List<M> consume() throws InterruptedException {
+  private List<M> consume() throws InterruptedException {
     InMemorySystemFactory factory = new InMemorySystemFactory();
     Set<SystemStreamPartition> ssps = new HashSet<>();
     Set<String> streamNames = new HashSet<>();
@@ -217,7 +217,7 @@ public class StreamAssert<M> {
         .collect(Collectors.toList());
   }
 
-  public Map<Integer, List<M>> consumePartitions() throws InterruptedException {
+  private Map<Integer, List<M>> consumePartitions() throws InterruptedException {
     InMemorySystemFactory factory = new InMemorySystemFactory();
     Set<SystemStreamPartition> ssps = new HashSet<>();
     Set<String> streamNames = new HashSet<>();
@@ -234,7 +234,8 @@ public class StreamAssert<M> {
     Map<SystemStreamPartition, List<IncomingMessageEnvelope>> output = consumer.poll(ssps, 10);
     Map map = output.entrySet()
         .stream()
-        .collect(Collectors.toMap(entry -> entry.getKey().getPartition().getPartitionId(), entry -> entry.getValue()
+        .collect(Collectors.toMap(entry -> entry.getKey().getPartition().getPartitionId(),
+            entry -> entry.getValue()
             .stream()
             .map(e -> (M) e.getMessage())
             .filter(e -> !(e instanceof EndOfStreamMessage))
@@ -246,21 +247,17 @@ public class StreamAssert<M> {
     assertThat(consume(), IsIterableContainingInAnyOrder.containsInAnyOrder(expected.toArray()));
   }
 
-  public void comparePartitionsInAnyOrder(List<? extends List> expected) throws InterruptedException {
+  public void containsInAnyOrder(Map<Integer, ? extends List> expected) throws InterruptedException {
     Map<Integer, List<M>> actual = consumePartitions();
-    int i = 0;
-    for(List parition: expected){
-      assertThat(actual.get(i), IsIterableContainingInAnyOrder.containsInAnyOrder(parition.toArray()));
-      i++;
+    for(Integer paritionId: expected.keySet()){
+      assertThat(actual.get(paritionId), IsIterableContainingInAnyOrder.containsInAnyOrder(expected.get(paritionId).toArray()));
     }
   }
 
-  public void comparePartitionsInOrder(List<? extends List> expected) throws InterruptedException {
+  public void contains(Map<Integer, ? extends List> expected) throws InterruptedException {
     Map<Integer, List<M>> actual = consumePartitions();
-    int i = 0;
-    for(List parition: expected){
-      assertThat(actual.get(i), IsIterableContainingInOrder.contains(parition.toArray()));
-      i++;
+    for(Integer paritionId: expected.keySet()){
+      assertThat(actual.get(paritionId), IsIterableContainingInOrder.contains(expected.get(paritionId).toArray()));
     }
   }
 

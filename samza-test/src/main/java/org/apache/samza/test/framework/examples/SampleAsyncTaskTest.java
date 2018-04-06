@@ -10,7 +10,6 @@ import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.SystemStream;
 import org.apache.samza.system.framework.utils.StreamAssert;
-import org.apache.samza.system.inmemory.InMemorySystemUtils;
 import org.apache.samza.task.AsyncStreamTask;
 import org.apache.samza.task.ClosableTask;
 import org.apache.samza.task.InitableTask;
@@ -55,14 +54,13 @@ public class SampleAsyncTaskTest {
 
     // Run the test framework
     TestTask
-        .create(new AsyncRestTask(), new HashMap<>(), Mode.SINGLE_CONTAINER)
+        .create(new AsyncRestTask())
         .setTaskCallBackTimeoutMS(200)
-        .setTaskMaxConcurrency(4)
-        .addInputStream(CollectionStream.of("test.PageView", input))
+        .addInputStream(CollectionStream.of("test.input", input))
         .addOutputStream(CollectionStream.empty("test.Output"))
         .run();
 
-    StreamAssert.that("test.Output").containsInAnyOrder(output);
+    StreamAssert.that("test.Output").contains(output);
 
   }
 }
