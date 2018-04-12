@@ -16,7 +16,6 @@ import org.apache.samza.system.OutgoingMessageEnvelope;
 import org.apache.samza.system.SystemProducer;
 import org.apache.samza.system.SystemStream;
 import org.apache.samza.system.inmemory.InMemorySystemFactory;
-import org.apache.samza.test.framework.TestTask;
 
 
 public class CollectionStream<T> {

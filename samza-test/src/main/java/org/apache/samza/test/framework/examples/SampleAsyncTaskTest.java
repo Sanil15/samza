@@ -18,7 +18,7 @@ import org.apache.samza.task.TaskCallback;
 import org.apache.samza.task.TaskContext;
 import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.test.framework.Mode;
-import org.apache.samza.test.framework.TestTask;
+import org.apache.samza.test.framework.TestRunner;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
 import scala.Int;
@@ -53,8 +53,8 @@ public class SampleAsyncTaskTest {
     List<Integer> output = Arrays.asList(10,20,30,40,50);
 
     // Run the test framework
-    TestTask
-        .create(new AsyncRestTask())
+    TestRunner
+        .of(new AsyncRestTask())
         .setTaskCallBackTimeoutMS(200)
         .addInputStream(CollectionStream.of("test.input", input))
         .addOutputStream(CollectionStream.empty("test.Output"))

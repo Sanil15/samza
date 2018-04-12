@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.sun.org.apache.xpath.internal.operations.Mod;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.samza.application.StreamApplication;
 import org.apache.samza.config.Config;
 import org.apache.samza.config.JobConfig;
 import org.apache.samza.config.JobCoordinatorConfig;
@@ -19,17 +20,18 @@ import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCallback;
 import org.apache.samza.test.framework.stream.CollectionStream;
 
-public class TestTask {
+public class TestRunner {
   // Maintain the global job config
   private Map<String, String> configs;
   // Default job name
-  private static final String JOB_NAME = "test-task";
+  private static final String JOB_NAME = "test-samza";
   private static String SYSTEM_FACTORY = "systems.%s.samza.factory";
   private static String SYSTEM_OFFSET = "systems.%s.default.stream.samza.offset.default";
 
   // Either StreamTask or AsyncStreamTask exist
   private StreamTask syncTask;
   private AsyncStreamTask asyncTask;
+  private StreamApplication app;
 
   // InMemorySystemFactory
   private InMemorySystemFactory factoryTest;
@@ -44,12 +46,9 @@ public class TestTask {
     configs.putIfAbsent(String.format(SYSTEM_OFFSET,systemName), "oldest");
   }
 
-  private TestTask(StreamTask task, Map<String, String> config, Mode mode) {
-    Preconditions.checkNotNull(task);
-    Preconditions.checkNotNull(config);
-    this.syncTask = task;
-    this.configs = config;
-    this.mode = mode;
+  private TestRunner(){
+    this.configs = new HashMap<>();
+    this.mode = Mode.SINGLE_CONTAINER;
     factoryTest = new InMemorySystemFactory();
 
     // JOB Specific Config
@@ -63,40 +62,43 @@ public class TestTask {
 
   }
 
-  private TestTask(AsyncStreamTask task, Map<String, String> config, Mode mode) {
+  private TestRunner(StreamTask task) {
+    this();
     Preconditions.checkNotNull(task);
-    Preconditions.checkNotNull(config);
+    this.syncTask = task;
+  }
+
+  private TestRunner(AsyncStreamTask task) {
+    this();
+    Preconditions.checkNotNull(task);
     this.asyncTask = task;
-    this.configs = config;
-    factoryTest = new InMemorySystemFactory();
-    this.mode = mode;
-
-    // JOB Specific Config
-    configs.put(JobConfig.JOB_NAME(), JOB_NAME);
-
-    // Default Single Container configs
-    configs.put(JobConfig.PROCESSOR_ID(), "1");
-    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATION_UTILS_FACTORY, PassthroughCoordinationUtilsFactory.class.getName());
-    configs.putIfAbsent(JobCoordinatorConfig.JOB_COORDINATOR_FACTORY, PassthroughJobCoordinatorFactory.class.getName());
-    configs.put(TaskConfig.GROUPER_FACTORY(), SingleContainerGrouperFactory.class.getName());
-
   }
 
-  public static TestTask create(StreamTask task) {
-    return new TestTask(task, new HashMap<>(), Mode.SINGLE_CONTAINER);
+  private TestRunner(StreamApplication app) {
+    this();
+    Preconditions.checkNotNull(app);
+    this.app = app;
   }
 
-  public static TestTask create(AsyncStreamTask task) {
-    return new TestTask(task, new HashMap<>(), Mode.SINGLE_CONTAINER);
+  public static TestRunner of(StreamTask task) {
+    return new TestRunner(task);
   }
 
-  public TestTask addOverrideConfigs(Map<String,String> config) {
+  public static TestRunner of(AsyncStreamTask task) {
+    return new TestRunner(task);
+  }
+
+  public static TestRunner of(StreamApplication app) {
+    return new TestRunner(app);
+  }
+
+  public TestRunner addOverrideConfigs(Map<String,String> config) {
     Preconditions.checkNotNull(config);
     this.configs.putAll(config);
     return this;
   }
 
-  public TestTask setContainerMode(Mode mode) {
+  public TestRunner setContainerMode(Mode mode) {
     Preconditions.checkNotNull(mode);
     if(mode.equals(Mode.MULTI_CONTAINER)){ // zk based config
       // zk based config
@@ -106,14 +108,14 @@ public class TestTask {
 
   // Thread pool to run synchronous tasks in parallel.
   // Ordering is guarenteed
-  public TestTask setJobContainerThreadPoolSize(Integer value) {
+  public TestRunner setJobContainerThreadPoolSize(Integer value) {
     Preconditions.checkNotNull(value);
     configs.put("job.container.thread.pool.size", String.valueOf(value));
     return this;
   }
 
   // Timeout for processAsync() callback. When the timeout happens, it will throw a TaskCallbackTimeoutException and shut down the container.
-  public TestTask setTaskCallBackTimeoutMS(Integer value) {
+  public TestRunner setTaskCallBackTimeoutMS(Integer value) {
     Preconditions.checkNotNull(value);
     configs.put("task.callback.timeout.ms", String.valueOf(value));
     return this;
@@ -121,13 +123,13 @@ public class TestTask {
 
   // Max number of outstanding messages being processed per task at a time, applicable to both StreamTask and AsyncStreamTask.
   // Ordering is not guarenteed per partition
-  public TestTask setTaskMaxConcurrency(Integer value) {
+  public TestRunner setTaskMaxConcurrency(Integer value) {
     Preconditions.checkNotNull(value);
     configs.put("task.max.concurrency", String.valueOf(value));
     return this;
   }
 
-  public TestTask addInputStream(CollectionStream stream) {
+  public TestRunner addInputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
     initialzeSystem(stream.getSystemName());
     if(configs.containsKey(TaskConfig.INPUT_STREAMS()))
@@ -138,7 +140,7 @@ public class TestTask {
     return this;
   }
 
-  public TestTask addOutputStream(CollectionStream stream) {
+  public TestRunner addOutputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
     initialzeSystem(stream.getSystemName());
     configs.putAll(stream.getStreamConfig());
@@ -147,14 +149,17 @@ public class TestTask {
 
   public void run() throws Exception {
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
-    if (syncTask != null && asyncTask == null) {
+    if (syncTask != null && asyncTask == null && app == null) {
       runner.runSyncTask(syncTask);
       runner.waitForFinish();
-    } else if(asyncTask != null && syncTask == null) {
+    } else if(asyncTask != null && syncTask == null && app == null) {
       runner.runAsyncTask(asyncTask);
       runner.waitForFinish();
+    } else if(asyncTask == null && syncTask == null && app != null) {
+      runner.run(app);
+      runner.waitForFinish();
     } else {
-      throw new Exception("Test should use either one config async or sync, not both");
+      throw new Exception("Test should use either one config async, application or sync");
     }
   }
 

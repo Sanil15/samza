@@ -12,7 +12,7 @@ import org.apache.samza.system.inmemory.InMemorySystemUtils.*;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
-import org.apache.samza.test.framework.TestTask;
+import org.apache.samza.test.framework.TestRunner;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
 
@@ -35,15 +35,13 @@ public class SampleSyncTaskTest {
     };
 
 
-    TestTask
-        .create(task)
+    TestRunner
+        .of(task)
         .addInputStream(CollectionStream.of("test.input",input))
         .addOutputStream(CollectionStream.empty("test.output"))
-        .setJobContainerThreadPoolSize(4)
-        .setTaskMaxConcurrency(2)
         .run();
 
-    StreamAssert.that("test.output").containsInAnyOrder(output);
+    StreamAssert.that("test.output").contains(output);
 
   }
 }
