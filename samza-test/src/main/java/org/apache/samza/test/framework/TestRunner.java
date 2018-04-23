@@ -1,11 +1,9 @@
 package org.apache.samza.test.framework;
 
 import com.google.common.base.Preconditions;
-import com.sun.org.apache.xpath.internal.operations.Mod;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.samza.application.StreamApplication;
-import org.apache.samza.config.Config;
 import org.apache.samza.config.JobConfig;
 import org.apache.samza.config.JobCoordinatorConfig;
 import org.apache.samza.config.MapConfig;
@@ -14,42 +12,34 @@ import org.apache.samza.container.grouper.task.SingleContainerGrouperFactory;
 import org.apache.samza.runtime.LocalApplicationRunner;
 import org.apache.samza.standalone.PassthroughCoordinationUtilsFactory;
 import org.apache.samza.standalone.PassthroughJobCoordinatorFactory;
-import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.task.AsyncStreamTask;
 import org.apache.samza.task.StreamTask;
-import org.apache.samza.task.TaskCallback;
 import org.apache.samza.test.framework.stream.CollectionStream;
 
+
 public class TestRunner {
+
   // Maintain the global job config
-  private Map<String, String> configs;
+  private static Map<String, String> configs;
+
+  private static Map<String, Object> systems;
+
   // Default job name
   private static final String JOB_NAME = "test-samza";
-  private static String SYSTEM_FACTORY = "systems.%s.samza.factory";
-  private static String SYSTEM_OFFSET = "systems.%s.default.stream.samza.offset.default";
 
   // Either StreamTask or AsyncStreamTask exist
   private StreamTask syncTask;
   private AsyncStreamTask asyncTask;
   private StreamApplication app;
 
-  // InMemorySystemFactory
-  private InMemorySystemFactory factoryTest;
   // Mode defines single or multi container
   private Mode mode;
 
 
-  public void initialzeSystem(String systemName){
-    // System Factory InMemory System
-    configs.putIfAbsent(String.format(SYSTEM_FACTORY,systemName), InMemorySystemFactory.class.getName());
-    // Consume from the oldest for all streams in the system
-    configs.putIfAbsent(String.format(SYSTEM_OFFSET,systemName), "oldest");
-  }
-
   private TestRunner(){
     this.configs = new HashMap<>();
     this.mode = Mode.SINGLE_CONTAINER;
-    factoryTest = new InMemorySystemFactory();
+    this.systems = new HashMap<String,Object>();
 
     // JOB Specific Config
     configs.put(JobConfig.JOB_NAME(), JOB_NAME);
@@ -92,6 +82,16 @@ public class TestRunner {
     return new TestRunner(app);
   }
 
+  public static InMemoryCollectionStreamSystem getOrIntializeInMemoryCollectionStreamSystem(String systemName) {
+    Preconditions.checkState(systems != null);
+    if(!systems.containsKey(systemName)) {
+      InMemoryCollectionStreamSystem sys = InMemoryCollectionStreamSystem.create(systemName);
+      systems.put(systemName, sys);
+      configs.putAll(sys.getSystemConfigs());
+    }
+    return (InMemoryCollectionStreamSystem)systems.get(systemName);
+  }
+
   public TestRunner addOverrideConfigs(Map<String,String> config) {
     Preconditions.checkNotNull(config);
     this.configs.putAll(config);
@@ -106,34 +106,12 @@ public class TestRunner {
     return this;
   }
 
-  // Thread pool to run synchronous tasks in parallel.
-  // Ordering is guarenteed
-  public TestRunner setJobContainerThreadPoolSize(Integer value) {
-    Preconditions.checkNotNull(value);
-    configs.put("job.container.thread.pool.size", String.valueOf(value));
-    return this;
-  }
-
-  // Timeout for processAsync() callback. When the timeout happens, it will throw a TaskCallbackTimeoutException and shut down the container.
-  public TestRunner setTaskCallBackTimeoutMS(Integer value) {
-    Preconditions.checkNotNull(value);
-    configs.put("task.callback.timeout.ms", String.valueOf(value));
-    return this;
-  }
-
-  // Max number of outstanding messages being processed per task at a time, applicable to both StreamTask and AsyncStreamTask.
-  // Ordering is not guarenteed per partition
-  public TestRunner setTaskMaxConcurrency(Integer value) {
-    Preconditions.checkNotNull(value);
-    configs.put("task.max.concurrency", String.valueOf(value));
-    return this;
-  }
-
   public TestRunner addInputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
-    initialzeSystem(stream.getSystemName());
+    InMemoryCollectionStreamSystem system = getOrIntializeInMemoryCollectionStreamSystem(stream.getSystemName());
+    system.addInput(stream.getSystemName(), stream.getStreamId(),stream.getInitPartitions());
     if(configs.containsKey(TaskConfig.INPUT_STREAMS()))
-      configs.put(TaskConfig.INPUT_STREAMS(), configs.get(TaskConfig.INPUT_STREAMS()).concat(","+stream.getStreamId()));
+      configs.put(TaskConfig.INPUT_STREAMS(), configs.get(TaskConfig.INPUT_STREAMS()).concat(","+stream.getSystemName()+"."+stream.getStreamId()));
     stream.getStreamConfig().forEach((key,val) -> {
       configs.putIfAbsent((String)key, (String) val);
     });
@@ -142,7 +120,6 @@ public class TestRunner {
 
   public TestRunner addOutputStream(CollectionStream stream) {
     Preconditions.checkNotNull(stream);
-    initialzeSystem(stream.getSystemName());
     configs.putAll(stream.getStreamConfig());
     return this;
   }
@@ -164,4 +141,3 @@ public class TestRunner {
   }
 
 }
-

@@ -14,7 +14,6 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
 import org.apache.samza.test.framework.Mode;
-import org.apache.samza.test.framework.TestRunner;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.junit.Test;
 import scala.Int;
@@ -52,11 +51,11 @@ public class SampleSyncMultiPartitionTest {
     };
 
     // Run the test framework
-    TestRunner
-        .of(task)
-        .addInputStream(CollectionStream.of("test.Integer", input))
-        .addOutputStream(CollectionStream.empty("test.Output"))
-        .run();
+//    TestRunner
+//        .of(task)
+//        .addInputStream(CollectionStream.of("test.Integer", input))
+//        .addOutputStream(CollectionStream.empty("test.Output"))
+//        .run();
 
     StreamAssert.that("test.Output").contains(expected);
   }

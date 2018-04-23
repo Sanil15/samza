@@ -1,110 +1,102 @@
 package org.apache.samza.test.framework.stream;
 
-import com.google.common.base.Preconditions;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.samza.config.MapConfig;
 import org.apache.samza.config.TaskConfig;
-import org.apache.samza.operators.KV;
-import org.apache.samza.system.OutgoingMessageEnvelope;
-import org.apache.samza.system.SystemProducer;
-import org.apache.samza.system.SystemStream;
-import org.apache.samza.system.inmemory.InMemorySystemFactory;
+import org.apache.samza.serializers.Serde;
+import org.apache.samza.test.framework.InMemoryCollectionStreamSystem;
+import org.apache.samza.test.framework.TestRunner;
+import scala.concurrent.TaskRunner;
 
 
-public class CollectionStream<T> {
-  private Map<String, String> streamConfig;
+public class CollectionStream<T>{
+
   private String streamId;
   private String systemName;
-  private Integer partitionCount;
+  private Map<Integer, Iterable<? extends T>> partitions;
+
+  // Configs only specific to the stream
+  private Map<String, String> streamConfig;
+
+  // Serdes for the Stream
+  private Serde keySerde;
+  private Serde msgSerde;
+
+  // Configs specific to streams
   private static final String STREAM_TO_SYSTEM = "streams.%s.samza.system";
+  private static final String KEY_SERDE = "streams.%s.samza.key.serde";
+  private static final String MSG_SERDE = "streams.%s.samza.msg.serde";
 
-  private CollectionStream(String streamId, Iterable<T> collection, Integer partitionCount) {
-    Preconditions.checkState(streamId.indexOf(".") > 0 && streamId.indexOf(".") < streamId.length() - 1);
-    this.streamId = streamId.substring(streamId.indexOf(".") + 1);
-    this.systemName = streamId.substring(0, streamId.indexOf("."));
+
+  private CollectionStream(String systemName, String streamId) {
+    this.streamId = streamId;
     this.streamConfig = new HashMap<>();
-    this.partitionCount = partitionCount;
-
-    // Config Specific to strean
+    this.systemName = systemName;
+    // Config Specific to stream
     streamConfig.put(String.format(STREAM_TO_SYSTEM, this.streamId), systemName);
-    streamConfig.put(TaskConfig.INPUT_STREAMS(), streamId);
-
-    // Initialize the input by spinning up a producer
-    SystemProducer producer = new InMemorySystemFactory().getProducer(systemName, new MapConfig(streamConfig), null);
-    collection.forEach(T -> {
-      Object key = T instanceof Map.Entry ? ((Map.Entry) T).getKey() : null;
-      Object value = T instanceof Map.Entry ? ((Map.Entry) T).getValue() : T;
-      producer.send(this.streamId,
-          new OutgoingMessageEnvelope(new SystemStream(systemName, this.streamId), "0", key, value));
-    });
   }
 
-  private CollectionStream(String streamId) {
-    Preconditions.checkState(streamId.indexOf(".") > 0 && streamId.indexOf(".") < streamId.length() - 1);
-    this.streamId = streamId.substring(streamId.indexOf(".") + 1);
-    this.systemName = streamId.substring(0, streamId.indexOf("."));
+  private CollectionStream(String systemName, String streamId, Iterable<T> collection) {
+    this.streamId = streamId;
     this.streamConfig = new HashMap<>();
-  }
-
-  private CollectionStream(String streamId, Map<Integer,? extends Iterable> collection) {
-    Preconditions.checkState(streamId.indexOf(".") > 0 && streamId.indexOf(".") < streamId.length() - 1);
-    this.streamId = streamId.substring(streamId.indexOf(".") + 1);
-    this.systemName = streamId.substring(0, streamId.indexOf("."));
-
-    this.streamConfig = new HashMap<>();
-    this.partitionCount = collection.size();
+    this.systemName = systemName;
+    partitions = new HashMap<>();
+    partitions.put(0, collection);
 
     // Config Specific to stream
     streamConfig.put(String.format(STREAM_TO_SYSTEM, this.streamId), systemName);
-    streamConfig.put(TaskConfig.INPUT_STREAMS(), streamId);
+    streamConfig.put(TaskConfig.INPUT_STREAMS(), systemName+"."+streamId);
 
-    // Initialize the input by spinning up a producer
-    SystemProducer producer = new InMemorySystemFactory().getProducer(systemName, new MapConfig(streamConfig), null);
+  }
 
-    collection.forEach((partitionId, partition) -> {
-      partition.forEach(e -> {
-          Object key = e instanceof Pair ? ((Pair) e).getKey() : null;
-          Object value = e instanceof Pair ? ((Pair) e).getValue() : e;
-        producer.send(systemName,
-            new OutgoingMessageEnvelope(new SystemStream(systemName, this.streamId), Integer.valueOf(partitionId), key, value));
-
-      });
-    });
+  public Map<Integer, Iterable<? extends T>> getInitPartitions(){
+    return partitions;
   }
 
   public String getSystemName() {
     return systemName;
   }
 
-  public String getStreamId() {
-    return systemName+"."+streamId;
-  }
-
   public void setSystemName(String systemName) {
     this.systemName = systemName;
+  }
+
+  public String getStreamId() {
+    return streamId;
   }
 
   public Map<String, String> getStreamConfig() {
     return streamConfig;
   }
 
-  public static <T> CollectionStream<T> empty(String streamId) {
-    return new CollectionStream<>(streamId);
+  public CollectionStream withKeySerde(Serde serde){
+    this.keySerde = serde;
+    return this;
   }
 
-  public static <T> CollectionStream<T> of(String streamId, Iterable<T> collection) {
-    return new CollectionStream<>(streamId, collection, 1);
+  public CollectionStream withMsgSerde(Serde serde){
+    this.msgSerde = serde;
+    return this;
   }
 
-  public static <T> CollectionStream<T> of(String streamId, Map<Integer,? extends Iterable> partitions) {
-    return new CollectionStream<>(streamId, partitions);
+  public <T> List<T> getStreamState(){
+    InMemoryCollectionStreamSystem system = TestRunner.getOrIntializeInMemoryCollectionStreamSystem(systemName);
+    try {
+      return system.getStreamState(streamId);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+    return null;
+  }
+
+  public static <T> CollectionStream<T> empty(String systemName, String streamId) {
+    return new CollectionStream<>(systemName, streamId);
+  }
+
+  public static <T> CollectionStream<T> of(String systemName, String streamId, Iterable<T> collection) {
+    return new CollectionStream<>(systemName, streamId, collection);
   }
 
 }

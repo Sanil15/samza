@@ -61,13 +61,6 @@ public class TestApplication<T> {
   public static TestApplication create(HashMap<String, String> configs, Mode mode) {
     return new TestApplication(configs, mode);
   }
-
-  public <T> MessageStream<T> getInputStream(CollectionStream<T> stream) {return null;}
-
-  public <T> MessageStream<T> getInputStream(EventStream<T> stream) {return null;}
-
-  public <T> MessageStream<T> getInputStream(FileStream<T> stream) {return null;}
-
   public void run() {
     final LocalApplicationRunner runner = new LocalApplicationRunner(new MapConfig(configs));
     runner.run(application);
