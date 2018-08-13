@@ -27,7 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.samza.SamzaException;
+import org.apache.samza.checkpoint.file.FileSystemCheckpointManagerFactory;
 import org.apache.samza.operators.KV;
+import org.apache.samza.system.inmemory.InMemorySystemFactory;
 import org.apache.samza.test.framework.stream.CollectionStream;
 import org.hamcrest.collection.IsIterableContainingInOrder;
 import org.junit.Assert;
@@ -70,6 +72,11 @@ public class StreamTaskIntegrationTest {
 
     CollectionStream<Integer> input = CollectionStream.of("test", "input", inputList);
     CollectionStream output = CollectionStream.empty("test", "output");
+
+    Map<String, String> config = new HashMap<>();
+    config.put("systems.inmemory.samza.factory", FileSystemCheckpointManagerFactory.class.getName());
+    config.put("task.checkpoint.factory", "org.apache.samza.checkpoint.file.FileSystemCheckpointManagerFactory")
+
 
     TestRunner
         .of(MyStreamTestTask.class)
