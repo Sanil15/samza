@@ -318,6 +318,17 @@ public class YarnClusterResourceManager extends ClusterResourceManager implement
       }
     }
   }
+//
+//  public void moveStreamProcessor(SamzaResource resource, CommandBuilder builder) {
+//    stopStreamProcessor(resource);
+//    String processorId = builder.buildEnvironment().get(ShellCommandConfig.ENV_CONTAINER_ID());
+//    synchronized (lock) {
+//      requestResources(new SamzaResourceRequest(resource.getNumCores(), resource.getMemoryMb(), "ANY_HOST", processorId));
+//      log.info("Starting Container ID: {} on host: {}", resource.getContainerId(), resource.getHost());
+//
+//    }
+//  }
+
 
   public void stopStreamProcessor(SamzaResource resource) {
     synchronized (lock) {

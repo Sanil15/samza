@@ -158,7 +158,7 @@ project(':samza-api') {
 
 project(":samza-core_$scalaSuffix") {
   apply plugin: 'scala'
-  apply plugin: 'checkstyle'
+ // apply plugin: 'checkstyle'
 
   // Force scala joint compilation
   sourceSets.main.scala.srcDir "src/main/java"
@@ -189,6 +189,7 @@ project(":samza-core_$scalaSuffix") {
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile "org.slf4j:slf4j-api:$slf4jVersion"
     compile "net.jodah:failsafe:$failsafeVersion"
+    compile group: 'io.undertow', name: 'undertow-core', version: '2.0.13.Final'
     testCompile project(":samza-api").sourceSets.test.output
     testCompile "junit:junit:$junitVersion"
     testCompile "org.mockito:mockito-core:$mockitoVersion"
@@ -199,10 +200,10 @@ project(":samza-core_$scalaSuffix") {
     testCompile "org.hamcrest:hamcrest-all:$hamcrestVersion"
   }
 
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    toolVersion = "$checkstyleVersion"
-  }
+//  checkstyle {
+//    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+//    toolVersion = "$checkstyleVersion"
+//  }
 }
 
 project(":samza-azure_$scalaSuffix") {

@@ -54,7 +54,7 @@ public class TestContainerAllocator {
 
   @Before
   public void setup() throws Exception {
-    containerAllocator = new ContainerAllocator(manager, config, state);
+    containerAllocator = new ContainerAllocator(manager, config, state, null);
     requestState = new MockContainerRequestState(manager, false);
     Field requestStateField = containerAllocator.getClass().getSuperclass().getDeclaredField("resourceRequestState");
     requestStateField.setAccessible(true);

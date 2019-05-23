@@ -80,6 +80,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
 
   // The StandbyContainerManager manages standby-aware allocation and failover of containers
   private final Optional<StandbyContainerManager> standbyContainerManager;
+  private final ContainerPlacementManager containerPlacementManager;
 
   /**
    * A standard interface to request resources.
@@ -118,6 +119,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     ResourceManagerFactory factory = getContainerProcessManagerFactory(clusterManagerConfig);
     this.clusterResourceManager = checkNotNull(factory.getClusterResourceManager(this, state));
     this.metrics = new ContainerProcessManagerMetrics(config, state, registry);
+    this.containerPlacementManager = new ContainerPlacementManager(state, clusterResourceManager);
 
     if (jobConfig.getStandbyTasksEnabled()) {
       this.standbyContainerManager = Optional.of(new StandbyContainerManager(state, clusterResourceManager));
@@ -128,7 +130,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     if (this.hostAffinityEnabled) {
       this.containerAllocator = new HostAwareContainerAllocator(clusterResourceManager, clusterManagerConfig.getContainerRequestTimeout(), config, standbyContainerManager, state);
     } else {
-      this.containerAllocator = new ContainerAllocator(clusterResourceManager, config, state);
+      this.containerAllocator = new ContainerAllocator(clusterResourceManager, config, state, containerPlacementManager);
     }
 
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
@@ -147,6 +149,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     this.containerAllocator = allocator;
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
     this.standbyContainerManager = Optional.empty();
+    this.containerPlacementManager = null;
   }
 
   //package private, used only in tests
@@ -163,10 +166,12 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     this.metrics = new ContainerProcessManagerMetrics(config, state, registry);
     this.standbyContainerManager = Optional.empty();
 
+    this.containerPlacementManager = null;
+
     if (this.hostAffinityEnabled) {
       this.containerAllocator = new HostAwareContainerAllocator(clusterResourceManager, clusterManagerConfig.getContainerRequestTimeout(), config, this.standbyContainerManager, state);
     } else {
-      this.containerAllocator = new ContainerAllocator(clusterResourceManager, config, state);
+      this.containerAllocator = new ContainerAllocator(clusterResourceManager, config, state, null);
     }
 
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
@@ -417,6 +422,9 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       log.warn("Did not find a pending Processor ID for Container ID: {} on host: {}. " +
           "Ignoring invalid/redundant notification.", containerId, containerHost);
     }
+    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(resource.getContainerId()).isPresent()) {
+      containerPlacementManager.markMoveComplete(resource.getContainerId());
+    }
   }
 
   @Override
@@ -477,6 +485,33 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     return factory;
   }
 
+  public Map<String, SamzaResource> getCurrentRunningContainers() {
+    return state.runningProcessors;
+  }
+
+  public void requestMoveContainer(String containerId, String preferredHost) {
+    String processorId = null; // also referred to as resourceId
+    SamzaResource currentResource = null;
+    for (Map.Entry<String, SamzaResource> entry: state.runningProcessors.entrySet()) {
+      if (entry.getValue().getContainerId().equals(containerId)) {
+        log.info("Container ID: {} matched running Processor ID: {} on host: {}", containerId, entry.getKey(), entry.getValue().getHost());
+        currentResource = entry.getValue();
+        processorId = entry.getKey();
+        break;
+      }
+    }
+    if (processorId == null) {
+      log.info("No running Processor ID found for Container ID: {}. Ignoring move request", containerId);
+      return;
+    }
+    SamzaResourceRequest resourceRequest = new SamzaResourceRequest(currentResource.getNumCores(),
+        currentResource.getMemoryMb(), preferredHost, processorId);
+    containerPlacementManager.registerContainerMove(containerId, processorId, currentResource.getHost(),resourceRequest);
+    containerAllocator.issueResourceRequest(resourceRequest);
+    log.info("Issuing the following resource request with container allocator: {}" , resourceRequest);
+  }
+
+
   /**
    * Obtains the ID of the Samza processor pending launch on the provided resource (container).
    *
@@ -494,7 +529,11 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
   }
 
   private void handleContainerStop(String processorId, String resourceID, String preferredHost, int exitStatus) {
-    if (standbyContainerManager.isPresent()) {
+    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(resourceID).isPresent()) {
+      log.info("Found a move resourceId: {} with request {}", resourceID, containerPlacementManager.getMoveMetadata(resourceID).get());
+      SamzaResourceRequest resourceRequest = containerPlacementManager.getMoveMetadata(processorId).get().getResourceRequest();
+      containerAllocator.runStreamProcessor(resourceRequest, resourceRequest.getPreferredHost());
+    } else if (standbyContainerManager.isPresent()) {
       standbyContainerManager.get().handleContainerStop(processorId, resourceID, preferredHost, exitStatus, containerAllocator);
     } else {
       // If StandbyTasks are not enabled, we simply make a request for the preferredHost

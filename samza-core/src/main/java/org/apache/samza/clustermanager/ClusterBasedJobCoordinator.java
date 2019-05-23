@@ -215,6 +215,10 @@ public class ClusterBasedJobCoordinator {
       jmxServer = null;
     }
 
+
+    String status = UndertowServer.start(containerProcessManager);
+    LOG.info("Starting the Undertow Server on" + status);
+
     try {
       //initialize JobCoordinator state
       LOG.info("Starting cluster based job coordinator");

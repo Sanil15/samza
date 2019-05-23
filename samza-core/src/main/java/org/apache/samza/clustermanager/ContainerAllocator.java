@@ -35,9 +35,12 @@ import org.slf4j.LoggerFactory;
 public class ContainerAllocator extends AbstractContainerAllocator {
   private static final Logger log = LoggerFactory.getLogger(ContainerAllocator.class);
 
+  private ContainerPlacementManager containerPlacementManager;
+
   public ContainerAllocator(ClusterResourceManager manager,
-                            Config config, SamzaApplicationState state) {
+                            Config config, SamzaApplicationState state, ContainerPlacementManager containerPlacementManager) {
     super(manager, new ResourceRequestState(false, manager), config, state);
+    this.containerPlacementManager = containerPlacementManager;
   }
 
   /**
@@ -49,9 +52,31 @@ public class ContainerAllocator extends AbstractContainerAllocator {
    * */
   @Override
   public void assignResourceRequests() {
-    while (hasPendingRequest() && hasAllocatedResource(ResourceRequestState.ANY_HOST)) {
+    while (hasPendingRequest()) {
       SamzaResourceRequest request = peekPendingRequest();
+      String processorId = request.getProcessorId();
+      String preferredHost = request.getPreferredHost();
+      long requestCreationTime = request.getRequestTimestampMs();
       runStreamProcessor(request, ResourceRequestState.ANY_HOST);
+
+      if (containerPlacementManager.getMoveMetadata(processorId).isPresent()) {
+        // TO do check has request expired then return
+        log.info("Found a move request for processor id {}", processorId);
+        if(hasAllocatedResource(preferredHost)) {
+          log.info("Found an available container for Processor ID: {} on the preferred host: {}", processorId, preferredHost);
+          containerPlacementManager.initiaiteFailover(processorId, preferredHost);
+        } else {
+          // Maintain state on how many failed move requests from yarn happened, if that surpasses a configured max
+          // or has timed out then remove the move requests for that container
+          log.info("Move constraints are not satisfied requesting resources again");
+        }
+      }
+      else if(hasAllocatedResource(ResourceRequestState.ANY_HOST)) {
+        runStreamProcessor(request, ResourceRequestState.ANY_HOST);
+      }
+      else {
+       break;
+      }
     }
   }
 
@@ -68,6 +93,10 @@ public class ContainerAllocator extends AbstractContainerAllocator {
       String processorId = entry.getKey();
       requestResource(processorId, ResourceRequestState.ANY_HOST);
     }
+  }
+
+  private void checkContainerPlacementConstraints(SamzaResourceRequest request, SamzaResource samzaResource) {
+
   }
 
 }
