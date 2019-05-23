@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 public class ContainerPlacementManager {
 
-  private static final Logger log = LoggerFactory.getLogger(StandbyContainerManager.class);
+  private static final Logger log = LoggerFactory.getLogger(ContainerPlacementManager.class);
 
   private final SamzaApplicationState samzaApplicationState;
 
@@ -37,6 +37,15 @@ public class ContainerPlacementManager {
   private final Map<String, FailoverMetadata> failovers;
 
 
+  public boolean checkHostRequestedForMove(String hostname) {
+    for(FailoverMetadata metadata: failovers.values()) {
+      if (metadata.resourceRequest.getPreferredHost().equals(hostname))
+        return true;
+    }
+    return false;
+  }
+
+
   public ContainerPlacementManager(SamzaApplicationState samzaApplicationState,
       ClusterResourceManager clusterResourceManager) {
     this.samzaApplicationState = samzaApplicationState;
@@ -44,38 +53,52 @@ public class ContainerPlacementManager {
     this.failovers = new HashMap<>();
   }
 
-  public synchronized void initiaiteFailover(String activeContainerID, String preferredHost) {
-    this.clusterResourceManager.stopStreamProcessor(samzaApplicationState.runningProcessors.get(activeContainerID));
-    // update samza application state
+  public synchronized boolean initiaiteFailover(String activeContainerProcessorID, String preferredHost) {
+    if (!getMoveMetadata(activeContainerProcessorID).get().containerShutdownRequested) {
+      log.info("Move Request: Found an available container for Processor ID: {} on the preferred host: {}", activeContainerProcessorID, preferredHost);
+      log.info("Active Container Shutdown requested and failover is initiated");
+      this.clusterResourceManager.stopStreamProcessor(samzaApplicationState.runningProcessors.get(activeContainerProcessorID));
+      getMoveMetadata(activeContainerProcessorID).get().setContainerShutdownRequested();
+      return true;
+    }
+    return false;
+    // log.info("Active Container Shutdown already Requested waiting for Container to Stop");
   }
 
   /**
    * Register the failure of an active container (identified by its resource ID).
    */
-  public synchronized FailoverMetadata registerContainerMove(String activeContainerID, String activeContainerResourceID, String currentHost, SamzaResourceRequest resourceRequest) {
+  public synchronized FailoverMetadata registerContainerMove(String activeContainerID, String activeContainerSamzaProcessorID, String currentHost, SamzaResourceRequest resourceRequest) {
     // this active container's resource ID is already registered, in which case update the metadata
     FailoverMetadata failoverMetadata;
-    if (failovers.containsKey(activeContainerResourceID)) {
-      log.info("Already a failover is requested: {}, can't accept another one", failovers.get(activeContainerResourceID));
+    if (failovers.containsKey(activeContainerSamzaProcessorID)) {
+      log.info("Already a failover is requested: {}, can't accept another one", failovers.get(activeContainerSamzaProcessorID));
       failoverMetadata = null;
     } else {
-      failoverMetadata = new FailoverMetadata(activeContainerID, activeContainerResourceID, currentHost, resourceRequest);
-      log.info("Registering a new failover with metadata {}", failoverMetadata);
-      this.failovers.put(activeContainerResourceID, failoverMetadata);
+      failoverMetadata = new FailoverMetadata(activeContainerID, activeContainerSamzaProcessorID, currentHost, resourceRequest);
+      log.info("ContainerMoveAction Registering a new request failover with metadata {}", failoverMetadata);
+      this.failovers.put(activeContainerSamzaProcessorID, failoverMetadata);
     }
     return failoverMetadata;
   }
 
   public synchronized void markMoveComplete(String activeContainerResourceID) {
+    log.info("Marking the move complete for Samza Container with Processor ID", activeContainerResourceID);
     this.failovers.remove(activeContainerResourceID);
   }
+
+  public synchronized void markMoveFailed(String activeContainerResourceID) {
+    log.info("Marking the move failed for Samza Container with Processor ID", activeContainerResourceID);
+    this.failovers.remove(activeContainerResourceID);
+  }
+
 
   /**
    * Check if a activeContainerResource has failover-metadata associated with it
    */
-  public Optional<FailoverMetadata> getMoveMetadata(String activeContainerResourceID) {
-    return this.failovers.containsKey(activeContainerResourceID) ?
-        Optional.of(this.failovers.get(activeContainerResourceID)) : Optional.empty();
+  public Optional<FailoverMetadata> getMoveMetadata(String activeContainerSamzaProcessorId) {
+    return this.failovers.containsKey(activeContainerSamzaProcessorId) ?
+        Optional.of(this.failovers.get(activeContainerSamzaProcessorId)) : Optional.empty();
   }
 
 //
@@ -97,18 +120,68 @@ public class ContainerPlacementManager {
    */
   public class FailoverMetadata {
     public final String activeContainerID;
-    public final String activeContainerResourceID;
+    public final String activeContainerSamzaProcessorId;
     public final String currentHost;
     // Resource requests issued during this failover
     private final SamzaResourceRequest resourceRequest;
 
-    public FailoverMetadata(String activeContainerID, String activeContainerResourceID, String currentHost, SamzaResourceRequest resourceRequest) {
+    private Integer countOfMoves;
+    private boolean containerShutdownRequested;
+
+    public FailoverMetadata(String activeContainerID, String activeContainerSamzaProcessorId, String currentHost, SamzaResourceRequest resourceRequest) {
       this.activeContainerID = activeContainerID;
-      this.activeContainerResourceID = activeContainerResourceID;
+      this.activeContainerSamzaProcessorId = activeContainerSamzaProcessorId;
       this.currentHost = currentHost;
       this.resourceRequest = resourceRequest;
+      this.countOfMoves = 0;
+      this.containerShutdownRequested = false;
     }
-//
+
+    public Integer getCountOfMoves() {
+      return countOfMoves;
+    }
+
+    public boolean isContainerShutdownRequested() {
+      return containerShutdownRequested;
+    }
+
+    public void setContainerShutdownRequested() {
+      this.containerShutdownRequested = true;
+    }
+
+    public void incrementContainerMoveRequestCount() {
+      this.countOfMoves++;
+    }
+
+    public void setCountOfMoves(Integer countOfMoves) {
+      this.countOfMoves = countOfMoves;
+    }
+
+    public String getActiveContainerID() {
+      return activeContainerID;
+    }
+
+    public String getActiveContainerSamzaProcessorId() {
+      return activeContainerSamzaProcessorId;
+    }
+
+    public String getCurrentHost() {
+      return currentHost;
+    }
+
+    public SamzaResourceRequest getResourceRequest() {
+      return resourceRequest;
+    }
+
+    @Override
+    public String toString() {
+      return "[activeContainerID: " + this.activeContainerID + " activeContainerSamzaProcessorId: "
+          + this.activeContainerSamzaProcessorId + " resourceRequests: " + resourceRequest + "]";
+    }
+  }
+
+
+  //
 //    // Add the samzaResourceRequest to the list of resource requests associated with this failover
 //    public synchronized void recordResourceRequest(SamzaResourceRequest samzaResourceRequest) {
 //      this.resourceRequests.offer(samzaResourceRequest);
@@ -130,28 +203,6 @@ public class ContainerPlacementManager {
 //      resourceRequests.poll();
 //    }
 
-    public String getActiveContainerID() {
-      return activeContainerID;
-    }
-
-    public String getActiveContainerResourceID() {
-      return activeContainerResourceID;
-    }
-
-    public String getCurrentHost() {
-      return currentHost;
-    }
-
-    public SamzaResourceRequest getResourceRequest() {
-      return resourceRequest;
-    }
-
-    @Override
-    public String toString() {
-      return "[activeContainerID: " + this.activeContainerID + " activeContainerResourceID: "
-          + this.activeContainerResourceID + " resourceRequests: " + resourceRequest + "]";
-    }
-  }
 
 
 }

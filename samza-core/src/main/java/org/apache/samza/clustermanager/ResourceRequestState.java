@@ -123,7 +123,7 @@ public class ResourceRequestState {
    * Invoked each time a resource is returned from a {@link ClusterResourceManager}.
    * @param samzaResource The resource that was returned from the {@link ClusterResourceManager}
    */
-  public void addResource(SamzaResource samzaResource) {
+  public void addResource(SamzaResource samzaResource, Boolean addToPreferredHostQueue) {
     synchronized (lock) {
       String containerId = samzaResource.getContainerId();
       if (hostAffinityEnabled) {
@@ -157,8 +157,13 @@ public class ResourceRequestState {
           }
         }
       } else {
-        log.info("Saving Container ID: {} in the buffer for ANY_HOST since host affinity is not enabled.", containerId);
-        addToAllocatedResourceList(ANY_HOST, samzaResource);
+        if (addToPreferredHostQueue) {
+          log.info("Saving Container ID: {} in the buffer for PREFERRED since move flag is enabled.", containerId);
+          addToAllocatedResourceList(samzaResource.getHost(), samzaResource);
+        } else {
+          log.info("Saving Container ID: {} in the buffer for ANY_HOST since host affinity is not enabled.", containerId);
+          addToAllocatedResourceList(ANY_HOST, samzaResource);
+        }
       }
     }
   }

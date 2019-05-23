@@ -35,12 +35,9 @@ import org.slf4j.LoggerFactory;
 public class ContainerAllocator extends AbstractContainerAllocator {
   private static final Logger log = LoggerFactory.getLogger(ContainerAllocator.class);
 
-  private ContainerPlacementManager containerPlacementManager;
-
   public ContainerAllocator(ClusterResourceManager manager,
                             Config config, SamzaApplicationState state, ContainerPlacementManager containerPlacementManager) {
-    super(manager, new ResourceRequestState(false, manager), config, state);
-    this.containerPlacementManager = containerPlacementManager;
+    super(manager, new ResourceRequestState(false, manager), config, state, containerPlacementManager);
   }
 
   /**
@@ -56,26 +53,57 @@ public class ContainerAllocator extends AbstractContainerAllocator {
       SamzaResourceRequest request = peekPendingRequest();
       String processorId = request.getProcessorId();
       String preferredHost = request.getPreferredHost();
-      long requestCreationTime = request.getRequestTimestampMs();
-      runStreamProcessor(request, ResourceRequestState.ANY_HOST);
+      long requestCreationTime = request.getRequestTimestampMs(); // todo: timeout for expired resources, cancel and release
 
       if (containerPlacementManager.getMoveMetadata(processorId).isPresent()) {
         // TO do check has request expired then return
-        log.info("Found a move request for processor id {}", processorId);
+        // log.info("Found a move request for processor id {} on a preferred host {}", processorId, preferredHost);
+
+        // If failover is already under going
+        if (containerPlacementManager.getMoveMetadata(processorId).get().isContainerShutdownRequested()) {
+          break;
+        }
+
         if(hasAllocatedResource(preferredHost)) {
-          log.info("Found an available container for Processor ID: {} on the preferred host: {}", processorId, preferredHost);
-          containerPlacementManager.initiaiteFailover(processorId, preferredHost);
+         containerPlacementManager.initiaiteFailover(processorId, preferredHost);
         } else {
           // Maintain state on how many failed move requests from yarn happened, if that surpasses a configured max
-          // or has timed out then remove the move requests for that container
-          log.info("Move constraints are not satisfied requesting resources again");
+          // or has timed out then remove the move requests for that contain
+          log.info("Move constraints are not satisfied requesting resources since ");
+          // mark move failed if not able to issue resource requests
+          containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
+
+          // Release Unstartable Container and make a new move request to container allocator
+          // How to identify unstartable container
+          SamzaResource unstartableContainer = peekAllocatedResource(preferredHost);
+          if (unstartableContainer != null) {
+            // wait for one allocated resource
+            log.info("Got an unstartable container, releasing it {}", unstartableContainer);
+            resourceRequestState.releaseUnstartableContainer(unstartableContainer, preferredHost);
+            log.info("Requesting a new resource again");
+            requestResource(processorId, preferredHost);
+          }
+
+          // Try X number of times, potential problem this needs to happen with a timeout, try 3 times but wait for x
+          // seconds to ensure Yarn allocates resources for you! or when request is issued 3 times by container allocator
+          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > 300000;
+
+          if (requestExpired) {
+            log.info("Your Move Container Request expired doing nothing");
+            resourceRequestState.cancelResourceRequest(request);
+            // extra resources are already released by the Allocator Thread so you do not need to worry :)
+            containerPlacementManager.markMoveFailed(processorId);
+            break;
+          }
+          // break otherwise it will keep looping since you made another async call for requested Container
+          break;
         }
       }
       else if(hasAllocatedResource(ResourceRequestState.ANY_HOST)) {
+        log.info("Invoking a non move request {} to ANY_HOST", request.toString());
         runStreamProcessor(request, ResourceRequestState.ANY_HOST);
-      }
-      else {
-       break;
+      } else {
+        break;
       }
     }
   }
@@ -94,9 +122,4 @@ public class ContainerAllocator extends AbstractContainerAllocator {
       requestResource(processorId, ResourceRequestState.ANY_HOST);
     }
   }
-
-  private void checkContainerPlacementConstraints(SamzaResourceRequest request, SamzaResource samzaResource) {
-
-  }
-
 }

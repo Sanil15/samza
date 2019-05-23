@@ -453,6 +453,8 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       log.warn("Did not find a pending Processor ID for Container ID: {} on host: {}. " +
           "Ignoring invalid/redundant notification.", containerId, containerHost);
     }
+
+    // todo: To handle this when a move container failover fails and causes trouble
   }
 
   /**
@@ -489,26 +491,21 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     return state.runningProcessors;
   }
 
-  public void requestMoveContainer(String containerId, String preferredHost) {
-    String processorId = null; // also referred to as resourceId
-    SamzaResource currentResource = null;
-    for (Map.Entry<String, SamzaResource> entry: state.runningProcessors.entrySet()) {
-      if (entry.getValue().getContainerId().equals(containerId)) {
-        log.info("Container ID: {} matched running Processor ID: {} on host: {}", containerId, entry.getKey(), entry.getValue().getHost());
-        currentResource = entry.getValue();
-        processorId = entry.getKey();
-        break;
-      }
-    }
-    if (processorId == null) {
-      log.info("No running Processor ID found for Container ID: {}. Ignoring move request", containerId);
+  // processorId 0,1,2 = current yarn container id not samza container id
+  // preferredHost = fully qualified hostname
+  public void requestMoveContainer(String processorId, String preferredHost) {
+    log.info("ContainerMoveAction requested for processorId {} to a host {}" , processorId, preferredHost);
+    SamzaResource currentResource = state.runningProcessors.get(processorId);
+    String containerId = currentResource.getContainerId();
+    if (currentResource == null) {
+      log.info("Found no SamzaResource corresponding to the processorId {}, DISCARDING the move request", processorId);
       return;
     }
-    SamzaResourceRequest resourceRequest = new SamzaResourceRequest(currentResource.getNumCores(),
-        currentResource.getMemoryMb(), preferredHost, processorId);
+    log.info("Processor ID: {} matched a running active Container with yarn ID: {} found running on host: {}", processorId, containerId, currentResource.getHost());
+    SamzaResourceRequest resourceRequest = new SamzaResourceRequest(currentResource.getNumCores(), currentResource.getMemoryMb(), preferredHost, processorId);
     containerPlacementManager.registerContainerMove(containerId, processorId, currentResource.getHost(),resourceRequest);
     containerAllocator.issueResourceRequest(resourceRequest);
-    log.info("Issuing the following resource request with container allocator: {}" , resourceRequest);
+    log.info("ContainerMoveAction issued for following resource request with container allocator: {}" , resourceRequest);
   }
 
 
@@ -529,8 +526,8 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
   }
 
   private void handleContainerStop(String processorId, String resourceID, String preferredHost, int exitStatus) {
-    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(resourceID).isPresent()) {
-      log.info("Found a move resourceId: {} with request {}", resourceID, containerPlacementManager.getMoveMetadata(resourceID).get());
+    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(processorId).isPresent()) {
+      log.info("Issuing a run processor request since a move resourceId: {} with request {}", resourceID, containerPlacementManager.getMoveMetadata(processorId).get());
       SamzaResourceRequest resourceRequest = containerPlacementManager.getMoveMetadata(processorId).get().getResourceRequest();
       containerAllocator.runStreamProcessor(resourceRequest, resourceRequest.getPreferredHost());
     } else if (standbyContainerManager.isPresent()) {

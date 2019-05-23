@@ -27,6 +27,8 @@ import io.undertow.server.RoutingHandler;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.apache.log4j.Logger;
+import org.codehaus.jackson.map.ObjectMapper;
+
 
 public class UndertowServer {
   private final static Logger LOGGER = Logger.getLogger(UndertowServer.class.getName());
@@ -39,9 +41,9 @@ public class UndertowServer {
           @Override
           public void handleRequest(HttpServerExchange exchange) throws Exception {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
-            JsonObject map = new JsonObject();
-            manager.getCurrentRunningContainers().forEach((k,v) -> map.addProperty(k, v.toString()));
-            exchange.getResponseSender().send(map.getAsString());
+            String json = new ObjectMapper().writeValueAsString(manager.getCurrentRunningContainers());
+            LOGGER.info("List of Running containers is found to be {}" + json);
+            exchange.getResponseSender().send(json);
           }});
 
 

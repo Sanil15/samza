@@ -18,6 +18,7 @@
  */
 package org.apache.samza.clustermanager;
 
+import java.util.Optional;
 import org.apache.samza.SamzaException;
 import org.apache.samza.config.ClusterManagerConfig;
 import org.apache.samza.config.Config;
@@ -58,6 +59,8 @@ public abstract class AbstractContainerAllocator implements Runnable {
    * A ClusterResourceManager for the allocator to request for resources.
    */
   protected final ClusterResourceManager clusterResourceManager;
+
+  protected ContainerPlacementManager containerPlacementManager;
   /**
    * The allocator sleeps for allocatorSleepIntervalMs before it polls its queue for the next request
    */
@@ -81,13 +84,14 @@ public abstract class AbstractContainerAllocator implements Runnable {
   public AbstractContainerAllocator(ClusterResourceManager containerProcessManager,
                                     ResourceRequestState resourceRequestState,
                                     Config config,
-                                    SamzaApplicationState state) {
+                                    SamzaApplicationState state, ContainerPlacementManager containerPlacementManager) {
     ClusterManagerConfig clusterManagerConfig = new ClusterManagerConfig(config);
     this.clusterResourceManager = containerProcessManager;
     this.allocatorSleepIntervalMs = clusterManagerConfig.getAllocatorSleepTime();
     this.resourceRequestState = resourceRequestState;
     this.containerMemoryMb = clusterManagerConfig.getContainerMemoryMb();
     this.containerNumCpuCores = clusterManagerConfig.getNumCores();
+    this.containerPlacementManager = containerPlacementManager;
     this.taskConfig = new TaskConfig(config);
     this.state = state;
     this.config = config;
@@ -249,7 +253,10 @@ public abstract class AbstractContainerAllocator implements Runnable {
    * @param samzaResource returned by the ContainerManager
    */
   public final void addResource(SamzaResource samzaResource) {
-    resourceRequestState.addResource(samzaResource);
+    if (containerPlacementManager != null && containerPlacementManager.checkHostRequestedForMove(samzaResource.getHost()))
+      resourceRequestState.addResource(samzaResource, true);
+    else
+      resourceRequestState.addResource(samzaResource, false);
   }
 
   /**
