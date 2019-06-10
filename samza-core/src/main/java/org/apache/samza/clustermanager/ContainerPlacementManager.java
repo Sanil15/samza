@@ -126,6 +126,7 @@ public class ContainerPlacementManager {
     private final SamzaResourceRequest resourceRequest;
 
     private Integer countOfMoves;
+    private long lastAllocatorRequestTime;
     private boolean containerShutdownRequested;
 
     public FailoverMetadata(String activeContainerID, String activeContainerSamzaProcessorId, String currentHost, SamzaResourceRequest resourceRequest) {
@@ -135,6 +136,15 @@ public class ContainerPlacementManager {
       this.resourceRequest = resourceRequest;
       this.countOfMoves = 0;
       this.containerShutdownRequested = false;
+      this.lastAllocatorRequestTime = System.currentTimeMillis();
+    }
+
+    public long getLastAllocatorRequestTime() {
+      return lastAllocatorRequestTime;
+    }
+
+    public void setAllocatorRequestTime() {
+      this.lastAllocatorRequestTime = System.currentTimeMillis();
     }
 
     public Integer getCountOfMoves() {

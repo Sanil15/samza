@@ -18,6 +18,7 @@
  */
 package org.apache.samza.clustermanager;
 
+import java.time.Duration;
 import java.util.Map;
 import org.apache.samza.config.Config;
 import org.slf4j.Logger;
@@ -59,7 +60,7 @@ public class ContainerAllocator extends AbstractContainerAllocator {
         // TO do check has request expired then return
         // log.info("Found a move request for processor id {} on a preferred host {}", processorId, preferredHost);
 
-        // If failover is already under going
+        // If failover is already under going do not do anything
         if (containerPlacementManager.getMoveMetadata(processorId).get().isContainerShutdownRequested()) {
           break;
         }
@@ -69,24 +70,25 @@ public class ContainerAllocator extends AbstractContainerAllocator {
         } else {
           // Maintain state on how many failed move requests from yarn happened, if that surpasses a configured max
           // or has timed out then remove the move requests for that contain
-          log.info("Move constraints are not satisfied requesting resources since ");
-          // mark move failed if not able to issue resource requests
-          containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
 
-          // Release Unstartable Container and make a new move request to container allocator
-          // How to identify unstartable container
-          SamzaResource unstartableContainer = peekAllocatedResource(preferredHost);
-          if (unstartableContainer != null) {
+          // mark move failed if not able to issue resource requests
+          // Release & Retry: Release Unstartable Container and make a new move request to container allocator
+
+          long lastAllocatorRequest = System.currentTimeMillis() - containerPlacementManager.getMoveMetadata(processorId).get().getLastAllocatorRequestTime();
+
+          // Request Every 10 seconds
+          if (lastAllocatorRequest > Duration.ofSeconds(10).toMillis() && containerPlacementManager.getMoveMetadata(processorId).get().getCountOfMoves() <= 3) {
             // wait for one allocated resource
-            log.info("Got an unstartable container, releasing it {}", unstartableContainer);
-            resourceRequestState.releaseUnstartableContainer(unstartableContainer, preferredHost);
+            log.info("Move constraints are not satisfied requesting resources since ");
             log.info("Requesting a new resource again");
             requestResource(processorId, preferredHost);
+            containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
+            containerPlacementManager.getMoveMetadata(processorId).get().setAllocatorRequestTime();
           }
 
           // Try X number of times, potential problem this needs to happen with a timeout, try 3 times but wait for x
           // seconds to ensure Yarn allocates resources for you! or when request is issued 3 times by container allocator
-          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > 300000;
+          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > Duration.ofMinutes(2).toMillis();
 
           if (requestExpired) {
             log.info("Your Move Container Request expired doing nothing");
