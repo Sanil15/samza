@@ -81,6 +81,12 @@ public class ContainerAllocator extends AbstractContainerAllocator {
             // wait for one allocated resource
             log.info("Move constraints are not satisfied requesting resources since ");
             log.info("Requesting a new resource again");
+
+            // Cancel the existing request
+            resourceRequestState.cancelResourceRequest(request);
+            resourceRequestState.releaseExtraResources();
+
+            // Issue a new request
             requestResource(processorId, preferredHost);
             containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
             containerPlacementManager.getMoveMetadata(processorId).get().setAllocatorRequestTime();
