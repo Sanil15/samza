@@ -422,7 +422,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       log.warn("Did not find a pending Processor ID for Container ID: {} on host: {}. " +
           "Ignoring invalid/redundant notification.", containerId, containerHost);
     }
-    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(resource.getContainerId()).isPresent()) {
+    if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(processorId).isPresent()) {
       containerPlacementManager.markMoveComplete(resource.getContainerId());
     }
   }
