@@ -94,7 +94,7 @@ public class ContainerAllocator extends AbstractContainerAllocator {
 
           // Try X number of times, potential problem this needs to happen with a timeout, try 3 times but wait for x
           // seconds to ensure Yarn allocates resources for you! or when request is issued 3 times by container allocator
-          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > Duration.ofMinutes(2).toMillis();
+          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > Duration.ofMinutes(1).toMillis();
 
           if (requestExpired) {
             log.info("Your Move Container Request expired doing nothing");
