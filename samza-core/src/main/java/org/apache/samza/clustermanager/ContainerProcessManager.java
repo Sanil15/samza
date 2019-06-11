@@ -423,7 +423,8 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
           "Ignoring invalid/redundant notification.", containerId, containerHost);
     }
     if (containerPlacementManager != null && containerPlacementManager.getMoveMetadata(processorId).isPresent()) {
-      containerPlacementManager.markMoveComplete(resource.getContainerId());
+      log.info("Container moved and launced successfully {}", resource);
+      containerPlacementManager.markMoveComplete(processorId);
     }
   }
 
