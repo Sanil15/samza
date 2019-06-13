@@ -76,21 +76,21 @@ public class ContainerAllocator extends AbstractContainerAllocator {
 
           long lastAllocatorRequest = System.currentTimeMillis() - containerPlacementManager.getMoveMetadata(processorId).get().getLastAllocatorRequestTime();
 
-//          // Request Every 10 seconds for 3 times
-//          if (lastAllocatorRequest > Duration.ofSeconds(10).toMillis() && containerPlacementManager.getMoveMetadata(processorId).get().getCountOfMoves() <= 3) {
-//            // wait for one allocated resource
-//            log.info("Move constraints are not satisfied requesting resources since ");
-//            log.info("Requesting a new resource again");
-//
-//            // Cancel the existing request
-//            resourceRequestState.cancelResourceRequest(request);
-//            resourceRequestState.releaseExtraResources();
-//
-//            // Issue a new request
-//            requestResource(processorId, preferredHost);
-//            containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
-//            containerPlacementManager.getMoveMetadata(processorId).get().setAllocatorRequestTime();
-//          }
+          // Request Every 10 seconds for 3 times
+          if (lastAllocatorRequest > Duration.ofSeconds(10).toMillis() && containerPlacementManager.getMoveMetadata(processorId).get().getCountOfMoves() <= 3) {
+            // wait for one allocated resource
+            log.info("Move constraints are not satisfied requesting resources since ");
+            log.info("Requesting a new resource again");
+
+            // Cancel the existing request
+            resourceRequestState.cancelResourceRequest(request);
+            resourceRequestState.releaseExtraResources();
+
+            // Issue a new request
+            requestResource(processorId, preferredHost);
+            containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
+            containerPlacementManager.getMoveMetadata(processorId).get().setAllocatorRequestTime();
+          }
 
           // Try X number of times, potential problem this needs to happen with a timeout, try 3 times but wait for x
           // seconds to ensure Yarn allocates resources for you! or when request is issued 3 times by container allocator
