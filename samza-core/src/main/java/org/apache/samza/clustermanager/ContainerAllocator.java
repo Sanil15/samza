@@ -74,34 +74,23 @@ public class ContainerAllocator extends AbstractContainerAllocator {
           // mark move failed if not able to issue resource requests
           // Release & Retry: Release Unstartable Container and make a new move request to container allocator
 
-          long lastAllocatorRequest = System.currentTimeMillis() - containerPlacementManager.getMoveMetadata(processorId).get().getLastAllocatorRequestTime();
-
-          // Request Every 10 seconds for 3 times
-          if (lastAllocatorRequest > Duration.ofSeconds(10).toMillis() && containerPlacementManager.getMoveMetadata(processorId).get().getCountOfMoves() <= 3) {
-            // wait for one allocated resource
-            log.info("Move constraints are not satisfied requesting resources since ");
-            log.info("Requesting a new resource again");
-
-            // Cancel the existing request
-            resourceRequestState.cancelResourceRequest(request);
-            resourceRequestState.releaseExtraResources();
-
-            // Issue a new request
-            requestResource(processorId, preferredHost);
-            containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
-            containerPlacementManager.getMoveMetadata(processorId).get().setAllocatorRequestTime();
-          }
-
           // Try X number of times, potential problem this needs to happen with a timeout, try 3 times but wait for x
           // seconds to ensure Yarn allocates resources for you! or when request is issued 3 times by container allocator
-          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > Duration.ofMinutes(2).toMillis();
+          boolean requestExpired =  System.currentTimeMillis() - request.getRequestTimestampMs() > Duration.ofSeconds(20).toMillis();
 
           if (requestExpired) {
-            log.info("Your Move Container Request expired doing nothing");
             resourceRequestState.cancelResourceRequest(request);
+            resourceRequestState.releaseExtraResources();
             // extra resources are already released by the Allocator Thread so you do not need to worry :)
-            containerPlacementManager.markMoveFailed(processorId);
-            break;
+            if (containerPlacementManager.getMoveMetadata(processorId).get().getCountOfMoves() <= 3) {
+              // Issue a new request
+              log.info("Your Move Container Request expired doing nothing, retrying");
+              requestResource(processorId, preferredHost);
+              containerPlacementManager.getMoveMetadata(processorId).get().incrementContainerMoveRequestCount();
+            } else {
+              log.info("Your Move Container Request expired after three retry");
+              containerPlacementManager.markMoveFailed(processorId);
+            }
           }
           // break otherwise it will keep looping since you made another async call for requested Container
           break;
@@ -110,8 +99,6 @@ public class ContainerAllocator extends AbstractContainerAllocator {
       else if(hasAllocatedResource(ResourceRequestState.ANY_HOST)) {
         log.info("Invoking a non move request {} to ANY_HOST", request.toString());
         runStreamProcessor(request, ResourceRequestState.ANY_HOST);
-      } else {
-        break;
       }
     }
   }
