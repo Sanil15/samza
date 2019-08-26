@@ -96,7 +96,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
   private final Thread allocatorThread;
 
   // The StandbyContainerManager manages standby-aware allocation and failover of containers
-  private final Optional<StandbyContainerManager> standbyContainerManager;
+  private final ContainerActionManager containerActionManager;
 
   private final Option<DiagnosticsManager> diagnosticsManager;
 
@@ -161,11 +161,9 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     this.metricsReporters.values().forEach(reporter -> reporter.register(METRICS_SOURCE_NAME, registry));
 
     // Enable standby container manager if required
-    if (jobConfig.getStandbyTasksEnabled()) {
-      this.standbyContainerManager = Optional.of(new StandbyContainerManager(state, clusterResourceManager));
-    } else {
-      this.standbyContainerManager = Optional.empty();
-    }
+
+
+    this.containerActionManager = new ContainerActionManager(state, clusterResourceManager, jobConfig.getStandbyTasksEnabled());
 
     this.containerAllocator =
         buildContainerAllocator(this.hostAffinityEnabled, this.clusterResourceManager, this.clusterManagerConfig,
