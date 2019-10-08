@@ -28,15 +28,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * ContainerManager is a single place that manages control actions like start, stop for both active and standby containers
+ * ContainerManager is a single entity that manages control actions like start, stop for both active and standby containers
  * ContainerManager acts as a brain for validating and issuing any actions on containers in the Job Coordinator.
  *
  * The requests to allocate resources resources made by {@link ContainerAllocator} can either expire or succeed.
- * When the requests succeeds the ContainerManager validates those requests before starting the container
+ * When the requests succeeds the ContainerManager validates those requests before starting the container.
  * When the requests expires the ContainerManager decides the next set of actions for the pending request.
  *
  * Callbacks issued from  {@link ClusterResourceManager} aka {@link ContainerProcessManager} are intercepted
- * by ContainerManager to handle container failure and completions for both active and standby containers
+ * by ContainerManager to handle container failure and completions for both active and standby containers to determine
  */
 public class ContainerManager {
 
