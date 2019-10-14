@@ -49,8 +49,8 @@ public class MockContainerRequestState extends ResourceRequestState {
   }
 
   @Override
-  public synchronized void addResource(SamzaResource container) {
-    super.addResource(container);
+  public synchronized void addResource(SamzaResource container, Boolean addToPreferredHost) {
+    super.addResource(container, addToPreferredHost);
 
     numAddedContainers++;
     for (MockContainerListener listener : mockContainerListeners) {
@@ -78,7 +78,6 @@ public class MockContainerRequestState extends ResourceRequestState {
       listener.postReleaseContainers(numReleasedContainers);
     }
   }
-
 
   public void registerContainerListener(MockContainerListener listener) {
     mockContainerListeners.add(listener);

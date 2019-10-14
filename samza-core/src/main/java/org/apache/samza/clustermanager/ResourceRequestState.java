@@ -124,10 +124,10 @@ public class ResourceRequestState {
    * Invoked each time a resource is returned from a {@link ClusterResourceManager}.
    * @param samzaResource The resource that was returned from the {@link ClusterResourceManager}
    */
-  public void addResource(SamzaResource samzaResource) {
+  public void addResource(SamzaResource samzaResource, Boolean addToPreferredHost) {
     synchronized (lock) {
       String containerId = samzaResource.getContainerId();
-      if (hostAffinityEnabled) {
+      if (hostAffinityEnabled || addToPreferredHost) {
         String hostName = samzaResource.getHost();
         AtomicInteger requestCount = hostRequestCounts.get(hostName);
         // Check if this host was requested for any of the resources
@@ -379,7 +379,7 @@ public class ResourceRequestState {
       // First search for the preferred host (may be ANY_HOST too)
       if (resourcesOnPreferredHostBuffer != null && !resourcesOnPreferredHostBuffer.isEmpty()) {
         SamzaResource resource = resourcesOnPreferredHostBuffer.get(0);
-        log.info("Found Container ID: {} for host: {} in the buffer.", resource.getContainerId(), host);
+        log.debug("Found Container ID: {} for host: {} in the buffer.", resource.getContainerId(), host);
         return resource;
       } else if (resourcesOnAnyHostBuffer != null && !resourcesOnAnyHostBuffer.isEmpty()) {
         // If no resources for preferred host int he buffer, look for ANY_HOST

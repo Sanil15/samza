@@ -94,7 +94,7 @@ public class TestContainerRequestState {
     ResourceRequestState state = new ResourceRequestState(false, manager);
     SamzaResource resource = new SamzaResource(1, 1024, "abc", "id1");
 
-    state.addResource(resource);
+    state.addResource(resource, false);
 
     assertNotNull(state.getHostRequestCounts());
     assertNotNull(state.getResourcesOnAHost(ANY_HOST));
@@ -105,7 +105,7 @@ public class TestContainerRequestState {
     // Container Allocated when there is no request in queue
     ResourceRequestState state1 = spy(new ResourceRequestState(true, manager));
     SamzaResource container1 = new SamzaResource(1, 1024, "zzz", "id2");
-    state1.addResource(container1);
+    state1.addResource(container1, false);
 
     assertEquals(0, state1.numPendingRequests());
 
@@ -133,7 +133,7 @@ public class TestContainerRequestState {
     assertNotNull(state1.getHostRequestCounts().get("abc"));
     assertEquals(1, state1.getHostRequestCounts().get("abc").get());
 
-    state1.addResource(resource);
+    state1.addResource(resource, false);
 
     assertNotNull(state1.getResourcesOnAHost("abc"));
     assertEquals(1, state1.getResourcesOnAHost("abc").size());
@@ -142,7 +142,7 @@ public class TestContainerRequestState {
     // Container Allocated on host that was not requested
     SamzaResource container2 = new SamzaResource(1, 1024, "xyz", "id2");
 
-    state1.addResource(container2);
+    state1.addResource(container2, false);
 
     assertNull(state1.getResourcesOnAHost("xyz"));
     assertNotNull(state1.getResourcesOnAHost(ANY_HOST));
@@ -151,7 +151,7 @@ public class TestContainerRequestState {
 
     // Extra containers were allocated on a host that was requested
     SamzaResource container3 = new SamzaResource(1, 1024, "abc", "id3");
-    state1.addResource(container3);
+    state1.addResource(container3, false);
 
     assertEquals(3, state1.getResourcesOnAHost(ANY_HOST).size());
     assertEquals(container3, state1.getResourcesOnAHost(ANY_HOST).get(2));
@@ -176,8 +176,8 @@ public class TestContainerRequestState {
     SamzaResource container = new SamzaResource(1, 1024, "abc", "id0");
 
     SamzaResource container1 = new SamzaResource(1, 1024, "zzz", "id1");
-    state.addResource(container);
-    state.addResource(container1);
+    state.addResource(container, false);
+    state.addResource(container1, false);
 
     assertEquals(2, state.numPendingRequests());
     assertEquals(2, state.getHostRequestCounts().size());
@@ -229,8 +229,8 @@ public class TestContainerRequestState {
 
     SamzaResource container = new SamzaResource(1, 1024, "abc", "id0");
     SamzaResource container1 = new SamzaResource(1, 1024, ANY_HOST, "id1");
-    state.addResource(container);
-    state.addResource(container1);
+    state.addResource(container, false);
+    state.addResource(container1, false);
 
     state.releaseResource("id0");
     assertEquals(0, state.getResourcesOnAHost("abc").size());

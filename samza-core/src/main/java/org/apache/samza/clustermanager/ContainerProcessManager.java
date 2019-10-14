@@ -401,6 +401,11 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       if (state.neededProcessors.decrementAndGet() == 0) {
         state.jobHealthy.set(true);
       }
+
+      if (containerManager.getMoveMetadata(processorId).isPresent()) {
+        containerManager.handleContainerLaunchSuccess(processorId);
+      }
+
     } else {
       LOG.warn("Did not find a pending Processor ID for Container ID: {} on host: {}. " +
           "Ignoring invalid/redundant notification.", containerId, containerHost);
@@ -611,5 +616,15 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
    */
   private void handleContainerStop(String processorId, String containerId, String preferredHost, int exitStatus, Duration preferredHostRetryDelay) {
     containerManager.handleContainerStop(processorId, containerId, preferredHost, exitStatus, preferredHostRetryDelay, containerAllocator);
+  }
+
+  public Map<String, SamzaResource> getCurrentRunningContainers() {
+    return state.runningProcessors;
+  }
+
+  // processorId 0,1,2 = current yarn container id not samza container id
+  // preferredHost = fully qualified hostname
+  public void requestMoveContainer(String processorId, String preferredHost) {
+    containerManager.registerControlAction(processorId, preferredHost, containerAllocator, Optional.empty());
   }
 }
