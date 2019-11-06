@@ -189,14 +189,16 @@ public class ContainerAllocator implements Runnable {
     while (hasReadyPendingRequest()) {
       SamzaResourceRequest request = peekReadyPendingRequest().get();
       String processorId = request.getProcessorId();
+      // TODO: Ask container manager for this pending request is there is a control-action so is thr resource preferred?
       String preferredHost = hostAffinityEnabled ? request.getPreferredHost() : ResourceRequestState.ANY_HOST;
       Instant requestCreationTime = request.getRequestTimestamp();
 
-      LOG.info("Handling assignment request for Processor ID: {} on host: {}.", processorId, preferredHost);
+      // TODO: commented this,
+      LOG.debug("Handling assignment request for Processor ID: {} on host: {}.", processorId, preferredHost);
       if (hasAllocatedResource(preferredHost)) {
 
-        // Found allocated container on preferredHost
-        LOG.info("Found an available container for Processor ID: {} on the host: {}", processorId, preferredHost);
+        // TODO: commented this Found allocated container on preferredHost
+        LOG.debug("Found an available container for Processor ID: {} on the host: {}", processorId, preferredHost);
 
         // Needs to be only updated when host affinity is enabled
         if (hostAffinityEnabled) {
@@ -213,13 +215,12 @@ public class ContainerAllocator implements Runnable {
 
         if (expired) {
           updateExpiryMetrics(request);
-          if (hostAffinityEnabled) {
-            containerManager.handleExpiredRequestWithHostAffinityEnabled(processorId, preferredHost, request, this, resourceRequestState);
-          }
+          containerManager.handleExpiredRequestWithHostAffinityEnabled(processorId, preferredHost, request, this, resourceRequestState);
         } else {
           LOG.info("Request for Processor ID: {} on preferred host {} has not expired yet."
                   + "Request creation time: {}. Current Time: {}. Request timeout: {} ms", processorId, preferredHost,
               requestCreationTime, System.currentTimeMillis(), requestExpiryTimeout);
+          //update this logging with request timeout of request
           break;
         }
       }
@@ -395,6 +396,7 @@ public class ContainerAllocator implements Runnable {
    * @param samzaResource returned by the ContainerManager
    */
   public final void addResource(SamzaResource samzaResource) {
+    //resourceRequestState.addResource(samzaResource, containerManager.isResourceRequestedForControlAction(samzaResource));
     resourceRequestState.addResource(samzaResource);
   }
 
@@ -421,7 +423,11 @@ public class ContainerAllocator implements Runnable {
    */
   private boolean isRequestExpired(SamzaResourceRequest request) {
     long currTime = Instant.now().toEpochMilli();
-    boolean requestExpired =  currTime - request.getRequestTimestamp().toEpochMilli() > requestExpiryTimeout;
+    Optional<Long> controlActionRequestExpirytimeout = containerManager.getActionExpiryTimeout(request.getProcessorId());
+    Long changedRequestExpiryTimeout =
+        controlActionRequestExpirytimeout.isPresent() ? controlActionRequestExpirytimeout.get()
+            : new Long(requestExpiryTimeout);
+    boolean requestExpired =  currTime - request.getRequestTimestamp().toEpochMilli() > changedRequestExpiryTimeout;
     if (requestExpired) {
       LOG.info("Request for Processor ID: {} on host: {} with creation time: {} has expired at current time: {} after timeout: {} ms.",
           request.getProcessorId(), request.getPreferredHost(), request.getRequestTimestamp(), currTime, requestExpiryTimeout);
