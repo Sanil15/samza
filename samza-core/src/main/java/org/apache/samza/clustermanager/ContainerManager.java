@@ -80,7 +80,8 @@ public class ContainerManager {
   void handleContainerLaunch(SamzaResourceRequest request, String preferredHost, SamzaResource allocatedResource,
       ResourceRequestState resourceRequestState, ContainerAllocator allocator) {
     // TODO: handle case of move action with standby
-    if (getMoveMetadata(request.getProcessorId()).isPresent()) {
+    Optional<ControlActionMetaData> metaData = getMoveMetadata(request.getProcessorId());
+    if (metaData.isPresent() && !metaData.get().getDestinationHost().equals("STANDBY")) {
       // TODO: handle this when StandbyContainer is enabled & metadata request is present
       handleContainerAllocationForExistingControlAction(request.getProcessorId(), allocator, request, preferredHost);
     } else if (this.standbyContainerManager.isPresent()) {
@@ -109,8 +110,14 @@ public class ContainerManager {
   void handleContainerStop(String processorId, String containerId, String preferredHost, int exitStatus,
       Duration preferredHostRetryDelay, ContainerAllocator containerAllocator) {
     if (getMoveMetadata(processorId).isPresent()) {
+      ControlActionMetaData metaData = getMoveMetadata(processorId).get();
       LOG.info("Setting the container with processorId {} stopped to be true", processorId);
-      getMoveMetadata(processorId).get().setActiveContainerStopped();
+      metaData.setActiveContainerStopped();
+      if (standbyContainerManager.isPresent() && metaData.getDestinationHost().equals("STANDBY")) {
+        standbyContainerManager.get()
+            .handleContainerStopForExistingControlAction(processorId, containerId, preferredHost, exitStatus,
+                containerAllocator, preferredHostRetryDelay);
+      }
     } else if (standbyContainerManager.isPresent()) {
       standbyContainerManager.get()
           .handleContainerStop(processorId, containerId, preferredHost, exitStatus, containerAllocator,
@@ -134,12 +141,12 @@ public class ContainerManager {
    */
   void handleContainerLaunchFail(String processorId, String containerId, String preferredHost,
       ContainerAllocator containerAllocator) {
-    if (processorId != null && getMoveMetadata(processorId).isPresent()) {
-      ControlActionMetaData metaData = getMoveMetadata(processorId).get();
+    Optional<ControlActionMetaData> metaData = getMoveMetadata(processorId);
+    if (processorId != null && metaData.isPresent() && !metaData.get().getDestinationHost().equals("STANDBY")) {
       // Issue a request to start the container on source host
-      String sourceHost = hostAffinityEnabled ? ResourceRequestState.ANY_HOST : metaData.getSourceHost();
+      String sourceHost = hostAffinityEnabled ? ResourceRequestState.ANY_HOST : metaData.get().getSourceHost();
       containerAllocator.requestResource(processorId, sourceHost);
-      metaData.setActionStatus(ControlActionStatus.StatusCode.FAILED, "failed to start container on destination host");
+      metaData.get().setActionStatus(ControlActionStatus.StatusCode.FAILED, "failed to start container on destination host");
       LOG.info("Marking the control action failed with metadata {}", metaData);
       this.actions.remove(processorId);
     } else if (processorId != null && standbyContainerManager.isPresent()) {
@@ -185,7 +192,8 @@ public class ContainerManager {
       SamzaResourceRequest request, ContainerAllocator allocator, ResourceRequestState resourceRequestState) {
     boolean resourceAvailableOnAnyHost = allocator.hasAllocatedResource(ResourceRequestState.ANY_HOST);
 
-    if (getMoveMetadata(processorId).isPresent()) {
+    Optional<ControlActionMetaData> metaData = getMoveMetadata(processorId);
+    if (metaData.isPresent() && !metaData.get().getDestinationHost().equals("STANDBY")) {
       LOG.info(
           "Move action expired since Cluster Manager was not able to allocate any resources for the container,  cancelling resource request & marking the action failed");
       resourceRequestState.cancelResourceRequest(request);
@@ -245,19 +253,37 @@ public class ContainerManager {
       destinationHost = ResourceRequestState.ANY_HOST;
     }
 
-    SamzaResourceRequest resourceRequest = containerAllocator.getResourceRequest(processorId, destinationHost);
-    ControlActionMetaData actionMetaData =
-        new ControlActionMetaData(processorId, currentResource.getContainerId(), currentResource.getHost(),
-            destinationHost, actionStatus, requestExpiry.isPresent() ? requestExpiry.get() : DEFAULT_CONTROL_ACTION_EXPIRY);
+    // if source host == destination host => restart for standby
 
-    // Record the resource request for monitoring
-    actionMetaData.setActionStatus(ControlActionStatus.StatusCode.IN_PROGRESS);
-    actionMetaData.recordResourceRequest(resourceRequest);
-    actions.put(processorId, actionMetaData);
-    // note this also updates state.preferredHost count
-    containerAllocator.issueResourceRequest(resourceRequest);
-    LOG.info("Control action with metadata {} and issued a request for resources in progress", actionMetaData);
-    return actionStatus;
+    if (standbyContainerManager.isPresent()) {
+      if (destinationHost.equals("STANDBY")) { // Initiate a Standby failover
+        clusterResourceManager.stopStreamProcessor(samzaApplicationState.runningProcessors.get(processorId));
+        ControlActionMetaData actionMetaData =
+            new ControlActionMetaData(processorId, currentResource.getContainerId(), currentResource.getHost(),
+                destinationHost, actionStatus, requestExpiry.isPresent() ? requestExpiry.get() : DEFAULT_CONTROL_ACTION_EXPIRY);
+        actionMetaData.setActionStatus(ControlActionStatus.StatusCode.IN_PROGRESS);
+        actions.put(processorId, actionMetaData);
+        return actionStatus;
+      } else {
+        // Check is host qualified for a failover
+        return null;
+      }
+    } else {
+
+      SamzaResourceRequest resourceRequest = containerAllocator.getResourceRequest(processorId, destinationHost);
+      ControlActionMetaData actionMetaData =
+          new ControlActionMetaData(processorId, currentResource.getContainerId(), currentResource.getHost(),
+              destinationHost, actionStatus, requestExpiry.isPresent() ? requestExpiry.get() : DEFAULT_CONTROL_ACTION_EXPIRY);
+
+      // Record the resource request for monitoring
+      actionMetaData.setActionStatus(ControlActionStatus.StatusCode.IN_PROGRESS);
+      actionMetaData.recordResourceRequest(resourceRequest);
+      actions.put(processorId, actionMetaData);
+      // note this also updates state.preferredHost count
+      containerAllocator.issueResourceRequest(resourceRequest);
+      LOG.info("Control action with metadata {} and issued a request for resources in progress", actionMetaData);
+      return actionStatus;
+    }
   }
 
   public Optional<Long> getActionExpiryTimeout(String processorId) {

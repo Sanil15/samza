@@ -109,6 +109,13 @@ public class StandbyContainerManager {
     }
   }
 
+  public void handleContainerStopForExistingControlAction(String containerID, String resourceID, String preferredHost, int exitStatus,
+      ContainerAllocator containerAllocator, Duration preferredHostRetryDelay) {
+    if (!StandbyTaskUtil.isStandbyContainer(containerID)) {
+      initiateStandbyAwareAllocation(containerID, resourceID, containerAllocator);
+    }
+  }
+
   /**
    * Handle the failed launch of a container, based on
    *    Case 1. If it is an active container, then initiate a failover for it.
