@@ -51,6 +51,7 @@ public class ContainerManager {
 
   private static final Logger LOG = LoggerFactory.getLogger(ContainerManager.class);
   private static final String ANY_HOST = ResourceRequestState.ANY_HOST;
+  private static final String STANDBY = "STANDBY";
 
   /**
    * Resource-manager, used to stop containers
@@ -65,7 +66,8 @@ public class ContainerManager {
    */
   private final ConcurrentHashMap<String, ContainerPlacementMetadata> actions;
 
-  private final Optional<StandbyContainerManager> standbyContainerManager;
+  private final Optional<StandbyContainerManager>
+      standbyContainerManager;
 
   public ContainerManager(SamzaApplicationState samzaApplicationState, ClusterResourceManager clusterResourceManager,
       boolean hostAffinityEnabled, boolean standByEnabled) {
@@ -153,8 +155,8 @@ public class ContainerManager {
   void handleContainerStop(String processorId, String containerId, String preferredHost, int exitStatus,
       Duration preferredHostRetryDelay, ContainerAllocator containerAllocator) {
     if (hasActiveContainerPlacementAction(processorId)) {
-      LOG.info("Setting the container state with processorId {} to be stopped because of existing container placement action", processorId);
-      getPlacementActionMetadata(processorId).get().setContainerStatus(ContainerPlacementMetadata.ContainerStatus.STOPPED);
+      handleContainerStopForPlacementAction(processorId, containerId, preferredHost, exitStatus,
+          preferredHostRetryDelay, containerAllocator);
     } else if (standbyContainerManager.isPresent()) {
       standbyContainerManager.get()
           .handleContainerStop(processorId, containerId, preferredHost, exitStatus, containerAllocator,
@@ -162,6 +164,19 @@ public class ContainerManager {
     } else {
       // If StandbyTasks are not enabled, we simply make a request for the preferredHost
       containerAllocator.requestResourceWithDelay(processorId, preferredHost, preferredHostRetryDelay);
+    }
+  }
+
+  private void handleContainerStopForPlacementAction(String processorId, String containerId, String preferredHost,
+      int exitStatus, Duration preferredHostRetryDelay, ContainerAllocator containerAllocator) {
+    ContainerPlacementMetadata metadata = getPlacementActionMetadata(processorId).get();
+    LOG.info("Setting the container state with metadata {} to be stopped because of existing container placement action", metadata);
+    metadata.setContainerStatus(ContainerPlacementMetadata.ContainerStatus.STOPPED);
+    // If the container has requested standby failover, handle the container stop using StandbyContainerManager
+    if (standbyContainerManager.isPresent() && metadata.getDestinationHost().equals(STANDBY)) {
+      standbyContainerManager.get()
+          .initiateStandbyFailover(processorId, containerId, preferredHost, exitStatus, containerAllocator,
+              preferredHostRetryDelay);
     }
   }
 
@@ -306,15 +321,22 @@ public class ContainerManager {
       destinationHost = ANY_HOST;
     }
 
-    SamzaResourceRequest resourceRequest = containerAllocator.getResourceRequest(processorId, destinationHost);
     ContainerPlacementMetadata actionMetaData = new ContainerPlacementMetadata(requestMessage, currentResource.getHost());
-    // Record the resource request for monitoring
-    actionMetaData.setActionStatus(ContainerPlacementMessage.StatusCode.IN_PROGRESS, "Preferred Resources requested");
-    actionMetaData.recordResourceRequest(resourceRequest);
-    actions.put(processorId, actionMetaData);
-    containerAllocator.issueResourceRequest(resourceRequest);
-    LOG.info("Container Placement action with metadata {} and issued a request for resources in progress",
-        actionMetaData);
+
+    if(destinationHost.equals(STANDBY)) {
+      clusterResourceManager.stopStreamProcessor(samzaApplicationState.runningProcessors.get(processorId));
+      actionMetaData.setActionStatus(ContainerPlacementMessage.StatusCode.IN_PROGRESS, "Standby failover initiated");
+      actions.put(processorId, actionMetaData);
+      LOG.info("Container Placement action with metadata {} issued Standby failover", actionMetaData);
+    } else {
+      SamzaResourceRequest resourceRequest = containerAllocator.getResourceRequest(processorId, destinationHost);
+      // Record the resource request for monitoring
+      actionMetaData.setActionStatus(ContainerPlacementMessage.StatusCode.IN_PROGRESS, "Preferred Resources requested");
+      actionMetaData.recordResourceRequest(resourceRequest);
+      actions.put(processorId, actionMetaData);
+      containerAllocator.issueResourceRequest(resourceRequest);
+      LOG.info("Container Placement action with metadata {} issued a request for resources in progress", actionMetaData);
+    }
   }
 
   /**
@@ -383,12 +405,12 @@ public class ContainerManager {
             processorId, destinationHost);
     Boolean invalidAction = false;
     String errorMessage = null;
-    if (standbyContainerManager.isPresent()) {
-      errorMessage = String.format("%s not supported for host standby enabled", errorMessagePrefix);
-      invalidAction = true;
-    } else if (processorId == null || destinationHost == null) {
+    if (processorId == null || destinationHost == null) {
       errorMessage = String.format("%s either processor id or the host argument is null", errorMessagePrefix);
       invalidAction = true;
+      /**
+       * THis will fail in case of standby containers
+       */
     } else if (Integer.parseInt(processorId) >= samzaApplicationState.processorCount.get()) {
       errorMessage = String.format("%s invalid processor id", errorMessagePrefix);
       invalidAction = true;
@@ -399,6 +421,12 @@ public class ContainerManager {
     } else if (actions.get(processorId) != null && actions.get(processorId).getUuid().equals(uuid)) {
       errorMessage = String.format("%s duplicate Container Placement request received, previous action taken: %s", errorMessagePrefix,
           actions.get(processorId));
+      invalidAction = true;
+    } else if (standbyContainerManager.isPresent() && checkActionAccepted()) {
+
+    } else if (standbyContainerManager.isPresent() && !destinationHost.equals(STANDBY) && standbyContainerManager.get()
+        .checkStandbyConstraints(processorId, destinationHost)) {
+      errorMessage = String.format("%s host does not match standby constraints, already used for standby container");
       invalidAction = true;
     } else if (!samzaApplicationState.runningProcessors.containsKey(processorId)
         || samzaApplicationState.pendingProcessors.containsKey(processorId)) {

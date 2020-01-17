@@ -109,6 +109,13 @@ public class StandbyContainerManager {
     }
   }
 
+  public void initiateStandbyFailover(String containerID, String resourceID, String preferredHost, int exitStatus,
+      ContainerAllocator containerAllocator, Duration preferredHostRetryDelay) {
+    if (!StandbyTaskUtil.isStandbyContainer(containerID)) {
+      initiateStandbyAwareAllocation(containerID, resourceID, containerAllocator);
+    }
+  }
+
   /**
    * Handle the failed launch of a container, based on
    *    Case 1. If it is an active container, then initiate a failover for it.
@@ -332,13 +339,11 @@ public class StandbyContainerManager {
   /**
    * Check if matching this SamzaResourceRequest to the given resource, meets all standby-container container constraints.
    *
-   * @param request The resource request to match.
-   * @param samzaResource The samzaResource to potentially match the resource to.
+   * @param containerIDToStart logical container id 1,2,3 of the container
+   * @param host host where it is intended to start
    * @return
    */
-  private boolean checkStandbyConstraints(SamzaResourceRequest request, SamzaResource samzaResource) {
-    String containerIDToStart = request.getProcessorId();
-    String host = samzaResource.getHost();
+   boolean checkStandbyConstraints(String containerIDToStart, String host) {
     List<String> containerIDsForStandbyConstraints = this.standbyContainerConstraints.get(containerIDToStart);
 
     // Check if any of these conflicting containers are running/launching on host
@@ -348,7 +353,7 @@ public class StandbyContainerManager {
       // return false if a conflicting container is pending for launch on the host
       if (resource != null && resource.getHost().equals(host)) {
         log.info("Container {} cannot be started on host {} because container {} is already scheduled on this host",
-            containerIDToStart, samzaResource.getHost(), containerID);
+            containerIDToStart, host, containerID);
         return false;
       }
 
@@ -356,7 +361,7 @@ public class StandbyContainerManager {
       resource = samzaApplicationState.runningProcessors.get(containerID);
       if (resource != null && resource.getHost().equals(host)) {
         log.info("Container {} cannot be started on host {} because container {} is already running on this host",
-            containerIDToStart, samzaResource.getHost(), containerID);
+            containerIDToStart, host, containerID);
         return false;
       }
     }
@@ -375,7 +380,7 @@ public class StandbyContainerManager {
       ResourceRequestState resourceRequestState) {
     String containerID = request.getProcessorId();
 
-    if (checkStandbyConstraints(request, samzaResource)) {
+    if (checkStandbyConstraints(containerID, samzaResource.getHost())) {
       // This resource can be used to launch this container
       log.info("Running container {} on {} meets standby constraints, preferredHost = {}", containerID,
           samzaResource.getHost(), preferredHost);
