@@ -58,6 +58,8 @@ public class StreamOperatorTask implements AsyncStreamTask, InitableTask, Window
   private ExecutorService taskThreadPool;
   private OperatorImplGraph operatorImplGraph;
 
+
+  private StreamOperatorTaskRunner taskRunner;
   /**
    * Constructs an adaptor task to run the user-implemented {@link OperatorSpecGraph}.
    * @param specGraph the serialized version of user-implemented {@link OperatorSpecGraph}
@@ -67,6 +69,7 @@ public class StreamOperatorTask implements AsyncStreamTask, InitableTask, Window
   public StreamOperatorTask(OperatorSpecGraph specGraph, Clock clock) {
     this.specGraph = specGraph.clone();
     this.clock = clock;
+    this.taskRunner = new StreamOperatorTaskRunner();
   }
 
   public StreamOperatorTask(OperatorSpecGraph specGraph) {
@@ -119,7 +122,7 @@ public class StreamOperatorTask implements AsyncStreamTask, InitableTask, Window
           MessageType messageType = MessageType.of(ime.getMessage());
           switch (messageType) {
             case USER_MESSAGE:
-              processFuture = inputOpImpl.onMessageAsync(ime, collector, coordinator);
+              processFuture = taskRunner.processMessage(inputOpImpl, ime, collector, coordinator);
               break;
 
             case END_OF_STREAM:

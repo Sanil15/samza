@@ -78,7 +78,7 @@ public abstract class OperatorImpl<M, RM> {
   // It's important to know so we can populate the watermarks correctly.
   private boolean usedInCurrentTask = false;
 
-  Set<OperatorImpl<RM, ?>> registeredOperators;
+  public Set<OperatorImpl<RM, ?>> registeredOperators;
   Set<OperatorImpl<?, M>> prevOperators;
   Set<SystemStream> inputStreams;
 
@@ -184,11 +184,7 @@ public abstract class OperatorImpl<M, RM> {
     CompletionStage<Void> result = completableResultsFuture.thenCompose(results -> {
         long endNs = this.highResClock.nanoTime();
         this.handleMessageNs.update(endNs - startNs);
-
-        return CompletableFuture.allOf(results.stream()
-            .flatMap(r -> this.registeredOperators.stream()
-              .map(op -> op.onMessageAsync(r, collector, coordinator)))
-            .toArray(CompletableFuture[]::new));
+        return CompletableFuture.allOf(results.stream().toArray(CompletableFuture[]::new));
       });
 
     WatermarkFunction watermarkFn = getOperatorSpec().getWatermarkFn();
