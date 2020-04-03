@@ -224,8 +224,7 @@ public class ClusterBasedJobCoordinator {
 
     // build utils related to container placements
     containerPlacementRequestAllocator =
-        new ContainerPlacementRequestAllocator(containerPlacementMetadataStore, containerProcessManager,
-            new ApplicationConfig(config));
+        new ContainerPlacementRequestAllocator(containerPlacementMetadataStore, containerProcessManager, config);
     this.containerPlacementRequestAllocatorThread =
         new Thread(containerPlacementRequestAllocator, "Samza-" + ContainerPlacementRequestAllocator.class.getSimpleName());
   }

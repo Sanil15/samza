@@ -86,6 +86,7 @@ public class TestContainerPlacementActions {
       put("job.coordinator.system", "test-kafka");
       put("app.run.id", "appAttempt-001");
       put("job.standbytasks.replication.factor", "2");
+      put("samza.internal.job.container.placement.request.allocator.sleep.ms", "500");
     }
   };
 
@@ -336,7 +337,7 @@ public class TestContainerPlacementActions {
               == ContainerPlacementMessage.StatusCode.SUCCEEDED) {
         break;
       }
-      Thread.sleep(Duration.ofSeconds(5).toMillis());
+      Thread.sleep(Duration.ofMillis(500).toMillis());
     }
 
     assertEquals(state.preferredHostRequests.get(), 4);
@@ -635,8 +636,8 @@ public class TestContainerPlacementActions {
       fail("timed out waiting for the containers to start");
     }
 
-    // Wait for both the containers to be in running state
-    while (state.runningProcessors.size() != 2) {
+    // Wait for action to complete
+    while (metadata.getActionStatus() != ContainerPlacementMessage.StatusCode.SUCCEEDED) {
       Thread.sleep(100);
     }
 
@@ -911,7 +912,7 @@ public class TestContainerPlacementActions {
               == ContainerPlacementMessage.StatusCode.BAD_REQUEST) {
         break;
       }
-      Thread.sleep(Duration.ofSeconds(5).toMillis());
+      Thread.sleep(Duration.ofMillis(500).toMillis());
     }
 
     // App running state should remain the same
@@ -948,7 +949,7 @@ public class TestContainerPlacementActions {
               == ContainerPlacementMessage.StatusCode.SUCCEEDED) {
         break;
       }
-      Thread.sleep(Duration.ofSeconds(5).toMillis());
+      Thread.sleep(Duration.ofMillis(500).toMillis());
     }
 
     assertEquals(4, state.runningProcessors.size());

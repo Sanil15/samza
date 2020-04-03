@@ -29,10 +29,15 @@ import org.apache.samza.zk.ZkCoordinationUtilsFactory;
 import org.apache.samza.zk.ZkJobCoordinatorFactory;
 
 public class JobCoordinatorConfig extends MapConfig {
+  private static final int DEFAULT_CLUSTER_MANAGER_CONTAINER_PLACEMENT_REQUEST_ALLOCATOR_SLEEP_MS = 5000;
+
   public static final String JOB_COORDINATOR_FACTORY = "job.coordinator.factory";
   public final static String DEFAULT_COORDINATOR_FACTORY = ZkJobCoordinatorFactory.class.getName();
   private static final String AZURE_COORDINATION_UTILS_FACTORY = "org.apache.samza.coordinator.AzureCoordinationUtilsFactory";
   private static final String AZURE_COORDINATOR_FACTORY = "org.apache.samza.coordinator.AzureJobCoordinatorFactory";
+  private static final String SAMZA_INTERNAL_CONTAINTER_PLACEMENT_REQUEST_ALLOCATOR_SLEEP_MS =
+      "samza.internal.job.container.placement.request.allocator.sleep.ms";
+
 
   public JobCoordinatorConfig(Config config) {
     super(config);
@@ -76,5 +81,10 @@ public class JobCoordinatorConfig extends MapConfig {
     } else {
       return jobCoordinatorFactoryClassName;
     }
+  }
+
+  public int getContainerPlacementRequestAllocatorSleepMs() {
+    return getInt(SAMZA_INTERNAL_CONTAINTER_PLACEMENT_REQUEST_ALLOCATOR_SLEEP_MS,
+        DEFAULT_CLUSTER_MANAGER_CONTAINER_PLACEMENT_REQUEST_ALLOCATOR_SLEEP_MS);
   }
 }

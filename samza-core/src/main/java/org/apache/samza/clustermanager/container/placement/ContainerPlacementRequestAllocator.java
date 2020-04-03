@@ -21,6 +21,8 @@ package org.apache.samza.clustermanager.container.placement;
 import com.google.common.base.Preconditions;
 import org.apache.samza.clustermanager.ContainerProcessManager;
 import org.apache.samza.config.ApplicationConfig;
+import org.apache.samza.config.Config;
+import org.apache.samza.config.JobCoordinatorConfig;
 import org.apache.samza.container.placement.ContainerPlacementRequestMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +35,6 @@ import org.slf4j.LoggerFactory;
 public class ContainerPlacementRequestAllocator implements Runnable {
 
   private static final Logger LOG = LoggerFactory.getLogger(ContainerPlacementRequestAllocator.class);
-  private static final int DEFAULT_CLUSTER_MANAGER_CONTAINER_PLACEMENT_HANDLER_SLEEP_MS = 5000;
 
   /**
    * {@link ContainerProcessManager} needs to intercept container placement actions between ContainerPlacementRequestAllocator and
@@ -50,14 +51,19 @@ public class ContainerPlacementRequestAllocator implements Runnable {
    * RunId of the app
    */
   private final String appRunId;
+  /**
+   * Periodic sleep time for Container placement request allocator thread
+   */
+  private final int containerPlacementRequestAllocatorSleepMS;
 
-  public ContainerPlacementRequestAllocator(ContainerPlacementMetadataStore containerPlacementMetadataStore, ContainerProcessManager manager, ApplicationConfig config) {
+  public ContainerPlacementRequestAllocator(ContainerPlacementMetadataStore containerPlacementMetadataStore, ContainerProcessManager manager, Config config) {
     Preconditions.checkNotNull(containerPlacementMetadataStore, "containerPlacementMetadataStore cannot be null");
     Preconditions.checkNotNull(manager, "ContainerProcessManager cannot be null");
     this.containerProcessManager = manager;
     this.containerPlacementMetadataStore = containerPlacementMetadataStore;
     this.isRunning = true;
-    this.appRunId = config.getRunId();
+    this.appRunId = new ApplicationConfig(config).getRunId();
+    this.containerPlacementRequestAllocatorSleepMS = new JobCoordinatorConfig(config).getContainerPlacementRequestAllocatorSleepMs();
   }
 
   @Override
@@ -75,7 +81,7 @@ public class ContainerPlacementRequestAllocator implements Runnable {
             containerPlacementMetadataStore.deleteAllContainerPlacementMessages(message.getUuid());
           }
         }
-        Thread.sleep(DEFAULT_CLUSTER_MANAGER_CONTAINER_PLACEMENT_HANDLER_SLEEP_MS);
+        Thread.sleep(containerPlacementRequestAllocatorSleepMS);
       } catch (InterruptedException e) {
         LOG.warn("Got InterruptedException in ContainerPlacementRequestAllocator thread.", e);
         Thread.currentThread().interrupt();
