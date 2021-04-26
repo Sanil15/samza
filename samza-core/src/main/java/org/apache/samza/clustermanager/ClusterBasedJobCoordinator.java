@@ -110,16 +110,6 @@ public class ClusterBasedJobCoordinator {
    */
   private final ContainerProcessManager containerProcessManager;
 
-  /**
-   * A JobModelManager to return and refresh the {@link org.apache.samza.job.model.JobModel} when required.
-   */
-  private final JobModelManager jobModelManager;
-
-  /**
-   * A ChangelogStreamManager to handle creation of changelog stream and map changelog stream partitions
-   */
-  private final ChangelogStreamManager changelogStreamManager;
-
   /*
    * The interval for polling the Task Manager for shutdown.
    */
@@ -172,6 +162,7 @@ public class ClusterBasedJobCoordinator {
    */
   private JmxServer jmxServer;
 
+  private final MetadataResourceUtil metadataResourceUtil;
   /*
    * Denotes if the metadata changed across application attempts. Used only if job coordinator high availability is enabled
    */
@@ -194,11 +185,13 @@ public class ClusterBasedJobCoordinator {
     this.metrics = metrics;
     this.metadataStore = metadataStore;
     this.config = fullJobConfig;
-    // build a JobModelManager and ChangelogStreamManager and perform partition assignments.
-    this.changelogStreamManager = new ChangelogStreamManager(
-        new NamespaceAwareCoordinatorStreamStore(metadataStore, SetChangelogMapping.TYPE));
-    this.jobModelManager =
-        JobModelManager.apply(config, changelogStreamManager.readPartitionMapping(), metadataStore, metrics);
+    /**
+     * TODO: Job Model should be served from metadatastore
+     */
+    JobModelManager jobModelManager =
+        JobModelManager.apply(config, MetadataResourceUtil.readPartitionMapping(metadataStore), metadataStore, metrics);
+
+    this.metadataResourceUtil = new MetadataResourceUtil(jobModelManager.jobModel(), metadataStore, this.metrics, config);
 
     this.hasDurableStores = new StorageConfig(config).hasDurableStores();
     this.state = new SamzaApplicationState(jobModelManager);
@@ -263,37 +256,11 @@ public class ClusterBasedJobCoordinator {
       DiagnosticsUtil.writeMetadataFile(jobName, jobId, METRICS_SOURCE_NAME, execEnvContainerId, config);
 
       //create necessary checkpoint and changelog streams, if not created
-      JobModel jobModel = jobModelManager.jobModel();
-      MetadataResourceUtil metadataResourceUtil = new MetadataResourceUtil(jobModel, this.metrics, config);
       metadataResourceUtil.createResources();
-
-      /*
-       * We fanout startpoint if and only if
-       *  1. Startpoint is enabled in configuration
-       *  2. If AM HA is enabled, fanout only if startpoint enabled and job coordinator metadata changed
-       */
-      if (shouldFanoutStartpoint()) {
-        StartpointManager startpointManager = createStartpointManager();
-        startpointManager.start();
-        try {
-          startpointManager.fanOut(JobModelUtil.getTaskToSystemStreamPartitions(jobModel));
-        } finally {
-          startpointManager.stop();
-        }
-      }
-
-      // Remap changelog partitions to tasks
-      Map<TaskName, Integer> prevPartitionMappings = changelogStreamManager.readPartitionMapping();
-
-      Map<TaskName, Integer> taskPartitionMappings = new HashMap<>();
-      Map<String, ContainerModel> containers = jobModel.getContainers();
-      for (ContainerModel containerModel : containers.values()) {
-        for (TaskModel taskModel : containerModel.getTasks().values()) {
-          taskPartitionMappings.put(taskModel.getTaskName(), taskModel.getChangelogPartition().getPartitionId());
-        }
-      }
-
-      changelogStreamManager.updatePartitionMapping(prevPartitionMappings, taskPartitionMappings);
+      // fanout startpoints if AM HA is enabled
+      metadataResourceUtil.fanoutStartPoints(shouldFanoutStartpoint());
+      // Remap changelog paritions to tasks
+      metadataResourceUtil.updateTaskToChangelogPartitionMapping();
 
       containerProcessManager.start();
       systemAdmins.start();
@@ -479,11 +446,6 @@ public class ClusterBasedJobCoordinator {
   }
 
   @VisibleForTesting
-  StartpointManager createStartpointManager() {
-    return new StartpointManager(metadataStore);
-  }
-
-  @VisibleForTesting
   ContainerProcessManager createContainerProcessManager() {
     return new ContainerProcessManager(config, state, metrics, containerPlacementMetadataStore, localityManager,
         metadataChangedAcrossAttempts);
@@ -493,16 +455,6 @@ public class ClusterBasedJobCoordinator {
   JobCoordinatorMetadataManager createJobCoordinatorMetadataManager() {
     return new JobCoordinatorMetadataManager(new NamespaceAwareCoordinatorStreamStore(metadataStore,
         SetJobCoordinatorMetadataMessage.TYPE), JobCoordinatorMetadataManager.ClusterType.YARN, metrics);
-  }
-
-  @VisibleForTesting
-  boolean isApplicationMasterHighAvailabilityEnabled() {
-    return new JobConfig(config).getApplicationMasterHighAvailabilityEnabled();
-  }
-
-  @VisibleForTesting
-  boolean isMetadataChangedAcrossAttempts() {
-    return metadataChangedAcrossAttempts;
   }
 
   /**
@@ -520,4 +472,15 @@ public class ClusterBasedJobCoordinator {
     return isApplicationMasterHighAvailabilityEnabled() ?
         startpointEnabled && isMetadataChangedAcrossAttempts() : startpointEnabled;
   }
+
+  @VisibleForTesting
+  boolean isApplicationMasterHighAvailabilityEnabled() {
+    return new JobConfig(config).getApplicationMasterHighAvailabilityEnabled();
+  }
+
+  @VisibleForTesting
+  boolean isMetadataChangedAcrossAttempts() {
+    return metadataChangedAcrossAttempts;
+  }
+
 }
