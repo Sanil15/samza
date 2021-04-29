@@ -35,7 +35,7 @@ import org.apache.samza.config.MapConfig;
 import org.apache.samza.config.ZkConfig;
 import org.apache.samza.container.TaskName;
 import org.apache.samza.coordinator.JobCoordinatorListener;
-import org.apache.samza.coordinator.MetadataResourceUtil;
+import org.apache.samza.coordinator.MetadataResourceAdmin;
 import org.apache.samza.coordinator.StreamPartitionCountMonitor;
 import org.apache.samza.coordinator.metadatastore.CoordinatorStreamStore;
 import org.apache.samza.job.model.ContainerModel;
@@ -407,7 +407,7 @@ public class TestZkJobCoordinator {
         zkMetadataStore, coordinatorStreamStore));
     doReturn(mockStartpointManager).when(zkJobCoordinator).createStartpointManager();
 
-    MetadataResourceUtil mockMetadataResourceUtil = mock(MetadataResourceUtil.class);
+    MetadataResourceAdmin mockMetadataResourceUtil = mock(MetadataResourceAdmin.class);
     doReturn(mockMetadataResourceUtil).when(zkJobCoordinator).createMetadataResourceUtil(any(), any(Config.class));
 
     verifyZeroInteractions(mockStartpointManager);

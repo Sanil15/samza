@@ -54,7 +54,7 @@ public class ChangelogStreamManager {
    * @param config the configuration with changelog info.
    * @param maxChangeLogStreamPartitions the maximum number of changelog stream partitions to create.
    */
-  public static void createChangelogStreams(Config config, int maxChangeLogStreamPartitions) {
+  public void createChangelogStreams(Config config, int maxChangeLogStreamPartitions) {
     // Get changelog store config
     StorageConfig storageConfig = new StorageConfig(config);
     ImmutableMap.Builder<String, SystemStream> storeNameSystemStreamMapBuilder = new ImmutableMap.Builder<>();

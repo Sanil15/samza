@@ -28,7 +28,7 @@ import org.apache.samza.container.{SamzaContainer, SamzaContainerListener, TaskN
 import org.apache.samza.context.{ExternalContext, JobContextImpl}
 import org.apache.samza.coordinator.metadatastore.{CoordinatorStreamStore, NamespaceAwareCoordinatorStreamStore}
 import org.apache.samza.coordinator.stream.messages.SetChangelogMapping
-import org.apache.samza.coordinator.{JobModelManager, MetadataResourceUtil}
+import org.apache.samza.coordinator.{JobModelManager, MetadataResourceAdmin}
 import org.apache.samza.execution.RemoteJobPlanner
 import org.apache.samza.job.model.JobModelUtil
 import org.apache.samza.job.{StreamJob, StreamJobFactory}

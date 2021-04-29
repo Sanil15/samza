@@ -36,29 +36,23 @@ import org.apache.samza.config.StorageConfig;
 import org.apache.samza.config.TaskConfig;
 import org.apache.samza.container.ExecutionContainerIdManager;
 import org.apache.samza.container.LocalityManager;
-import org.apache.samza.container.TaskName;
 import org.apache.samza.coordinator.InputStreamsDiscoveredException;
 import org.apache.samza.coordinator.JobCoordinatorMetadataManager;
 import org.apache.samza.coordinator.JobModelManager;
-import org.apache.samza.coordinator.MetadataResourceUtil;
+import org.apache.samza.coordinator.MetadataResourceAdmin;
 import org.apache.samza.coordinator.PartitionChangeException;
 import org.apache.samza.coordinator.StreamPartitionCountMonitor;
 import org.apache.samza.coordinator.StreamRegexMonitor;
 import org.apache.samza.coordinator.metadatastore.NamespaceAwareCoordinatorStreamStore;
-import org.apache.samza.coordinator.stream.messages.SetChangelogMapping;
 import org.apache.samza.coordinator.stream.messages.SetContainerHostMapping;
 import org.apache.samza.coordinator.stream.messages.SetExecutionEnvContainerIdMapping;
 import org.apache.samza.coordinator.stream.messages.SetJobCoordinatorMetadataMessage;
 import org.apache.samza.job.JobCoordinatorMetadata;
-import org.apache.samza.job.model.ContainerModel;
 import org.apache.samza.job.model.JobModel;
 import org.apache.samza.job.model.JobModelUtil;
-import org.apache.samza.job.model.TaskModel;
 import org.apache.samza.metadatastore.MetadataStore;
 import org.apache.samza.metrics.JmxServer;
 import org.apache.samza.metrics.MetricsRegistryMap;
-import org.apache.samza.startpoint.StartpointManager;
-import org.apache.samza.storage.ChangelogStreamManager;
 import org.apache.samza.system.StreamMetadataCache;
 import org.apache.samza.system.SystemAdmins;
 import org.apache.samza.system.SystemStream;
@@ -162,7 +156,11 @@ public class ClusterBasedJobCoordinator {
    */
   private JmxServer jmxServer;
 
-  private final MetadataResourceUtil metadataResourceUtil;
+  /**
+   * Manages all the metadata related to AM for metadata stream (checkpoint, coordinator, changelog) and stores
+   * like Davinci, Ambry
+   */
+  private final MetadataResourceAdmin metadataResourceAdmin;
   /*
    * Denotes if the metadata changed across application attempts. Used only if job coordinator high availability is enabled
    */
@@ -189,9 +187,14 @@ public class ClusterBasedJobCoordinator {
      * TODO: Job Model should be served from metadatastore
      */
     JobModelManager jobModelManager =
-        JobModelManager.apply(config, MetadataResourceUtil.readPartitionMapping(metadataStore), metadataStore, metrics);
+        JobModelManager.apply(config, MetadataResourceAdmin.readPartitionMapping(metadataStore), metadataStore, metrics);
 
-    this.metadataResourceUtil = new MetadataResourceUtil(jobModelManager.jobModel(), metadataStore, this.metrics, config);
+    this.metadataResourceAdmin = new MetadataResourceAdmin.Builder(jobModelManager.jobModel(), metadataStore, config)
+        .withChangelogStreamManager()
+        .withCheckpointManager(this.metrics)
+        .withCoordinatorStreamManager()
+        .withStartpointManager()
+        .build();
 
     this.hasDurableStores = new StorageConfig(config).hasDurableStores();
     this.state = new SamzaApplicationState(jobModelManager);
@@ -256,11 +259,18 @@ public class ClusterBasedJobCoordinator {
       DiagnosticsUtil.writeMetadataFile(jobName, jobId, METRICS_SOURCE_NAME, execEnvContainerId, config);
 
       //create necessary checkpoint and changelog streams, if not created
-      metadataResourceUtil.createResources();
-      // fanout startpoints if AM HA is enabled
-      metadataResourceUtil.fanoutStartPoints(shouldFanoutStartpoint());
-      // Remap changelog paritions to tasks
-      metadataResourceUtil.updateTaskToChangelogPartitionMapping();
+      metadataResourceAdmin.createCheckpointMetadataResources();
+      metadataResourceAdmin.createChangelogMetadataResouces();
+      /*
+       * We fanout startpoint if and only if
+       *  1. Startpoint is enabled in configuration
+       *  2. If AM HA is enabled, fanout only if startpoint enabled and job coordinator metadata changed
+       */
+      if (shouldFanoutStartpoint()) {
+        metadataResourceAdmin.fanoutStartPoints();
+      }
+      // Remap changelog partitions to tasks
+      metadataResourceAdmin.updateTaskToChangelogPartitionMappingOnRestart();
 
       containerProcessManager.start();
       systemAdmins.start();
@@ -457,6 +467,16 @@ public class ClusterBasedJobCoordinator {
         SetJobCoordinatorMetadataMessage.TYPE), JobCoordinatorMetadataManager.ClusterType.YARN, metrics);
   }
 
+  @VisibleForTesting
+  boolean isApplicationMasterHighAvailabilityEnabled() {
+    return new JobConfig(config).getApplicationMasterHighAvailabilityEnabled();
+  }
+
+  @VisibleForTesting
+  boolean isMetadataChangedAcrossAttempts() {
+    return metadataChangedAcrossAttempts;
+  }
+
   /**
    * We only fanout startpoint if and only if
    *  1. Startpoint is enabled
@@ -472,15 +492,4 @@ public class ClusterBasedJobCoordinator {
     return isApplicationMasterHighAvailabilityEnabled() ?
         startpointEnabled && isMetadataChangedAcrossAttempts() : startpointEnabled;
   }
-
-  @VisibleForTesting
-  boolean isApplicationMasterHighAvailabilityEnabled() {
-    return new JobConfig(config).getApplicationMasterHighAvailabilityEnabled();
-  }
-
-  @VisibleForTesting
-  boolean isMetadataChangedAcrossAttempts() {
-    return metadataChangedAcrossAttempts;
-  }
-
 }

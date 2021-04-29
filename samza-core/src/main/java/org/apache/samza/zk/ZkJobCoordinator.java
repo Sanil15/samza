@@ -44,7 +44,7 @@ import org.apache.samza.coordinator.JobCoordinator;
 import org.apache.samza.coordinator.JobCoordinatorListener;
 import org.apache.samza.coordinator.JobModelManager;
 import org.apache.samza.coordinator.LeaderElectorListener;
-import org.apache.samza.coordinator.MetadataResourceUtil;
+import org.apache.samza.coordinator.MetadataResourceAdmin;
 import org.apache.samza.coordinator.StreamPartitionCountMonitor;
 import org.apache.samza.coordinator.metadatastore.CoordinatorStreamStore;
 import org.apache.samza.coordinator.metadatastore.NamespaceAwareCoordinatorStreamStore;
@@ -343,7 +343,7 @@ public class ZkJobCoordinator implements JobCoordinator {
   @VisibleForTesting
   void loadMetadataResources(JobModel jobModel) {
     try {
-      MetadataResourceUtil metadataResourceUtil = createMetadataResourceUtil(jobModel, config);
+      MetadataResourceAdmin metadataResourceUtil = createMetadataResourceAdmin(jobModel, config);
       metadataResourceUtil.createResources();
 
       if (coordinatorStreamStore != null) {
@@ -376,8 +376,8 @@ public class ZkJobCoordinator implements JobCoordinator {
   }
 
   @VisibleForTesting
-  MetadataResourceUtil createMetadataResourceUtil(JobModel jobModel, Config config) {
-    return new MetadataResourceUtil(jobModel, metrics.getMetricsRegistry(), config);
+  MetadataResourceAdmin createMetadataResourceAdmin(JobModel jobModel, Config config) {
+    return new MetadataResourceAdmin(jobModel, null, metrics.getMetricsRegistry(), config);
   }
 
   /**

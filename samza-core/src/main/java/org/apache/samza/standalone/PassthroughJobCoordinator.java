@@ -25,7 +25,7 @@ import org.apache.samza.container.grouper.task.GrouperMetadata;
 import org.apache.samza.container.grouper.task.GrouperMetadataImpl;
 import org.apache.samza.coordinator.JobCoordinator;
 import org.apache.samza.coordinator.JobModelManager;
-import org.apache.samza.coordinator.MetadataResourceUtil;
+import org.apache.samza.coordinator.MetadataResourceAdmin;
 import org.apache.samza.job.model.JobModel;
 import org.apache.samza.coordinator.JobCoordinatorListener;
 import org.apache.samza.runtime.LocationId;
@@ -85,8 +85,8 @@ public class PassthroughJobCoordinator implements JobCoordinator {
     try {
       jobModel = getJobModel();
       // TODO metrics registry has been null here for a while; is it safe?
-      MetadataResourceUtil metadataResourceUtil = new MetadataResourceUtil(jobModel, null, config);
-      metadataResourceUtil.createResources();
+      MetadataResourceAdmin metadataResourceUtil = new MetadataResourceAdmin(jobModel, null,null, config);
+      metadataResourceUtil.createChangelogAndCheckpointMetadataResource();
     } catch (Exception e) {
       LOGGER.error("Exception while trying to getJobModel.", e);
       if (coordinatorListener != null) {
